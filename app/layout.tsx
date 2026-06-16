@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const barlowCondensed = Barlow_Condensed({
+  variable: "--font-sport",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+});
 
 export const metadata: Metadata = {
   title: "FIFA26 Viewer",
@@ -13,8 +18,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable} h-full`}>
-      <body className="min-h-full bg-slate-900 antialiased">{children}</body>
+    <html lang="en" className={`${geist.variable} ${barlowCondensed.variable} h-full`}>
+      <body className="min-h-full antialiased" style={{ background: "#090d1f" }}>{children}</body>
     </html>
   );
 }
