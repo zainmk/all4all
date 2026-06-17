@@ -1,4 +1,5 @@
 import type { Match, MatchEnrichment, PastMatch } from "@/types";
+import { resolveAlias } from "@/lib/team-aliases";
 
 // ESPN public scoreboard API — no auth, no CORS issues
 const ESPN_BASE =
@@ -27,7 +28,7 @@ interface ESPNEvent {
 }
 
 function normalize(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return resolveAlias(name.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
 function teamKey(home: string, away: string): string {
