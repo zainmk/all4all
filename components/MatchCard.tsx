@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { Match, MatchEnrichment } from "@/types";
+import type { Match, MatchEnrichment, MatchSource } from "@/types";
 import { badgeUrl, embedUrl, usableSources } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
+
+const SOURCE_PRIORITY = ["delta", "echo", "golf"];
 
 function TeamBadge({ badge, name, className = "w-10 h-10" }: { badge?: string; name?: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -44,12 +46,14 @@ export function MatchCard({
   match,
   isLive,
   enrichment,
+  validSources,
 }: {
   match: Match;
   isLive?: boolean;
   enrichment?: MatchEnrichment;
+  validSources?: MatchSource[];
 }) {
-  const sources = usableSources(match.sources);
+  const sources = usableSources(match.sources); // all sources — always shown in badges
   const score = enrichment?.score;
   const clock = enrichment?.clock;
   const venue = enrichment?.venue;
@@ -57,10 +61,11 @@ export function MatchCard({
   const [isHovered, setIsHovered] = useState(false);
 
   function getPreferredSource() {
-    const priority = window.innerWidth < 768
-      ? ["echo", "delta", "golf"]
-      : ["delta", "echo", "golf"];
-    return priority.map((p) => sources.find((s) => s.source.toLowerCase() === p)).find(Boolean) ?? sources[0];
+    // Click opens first valid source in priority order; fall back to all usable sources
+    const pool = (validSources && validSources.length > 0) ? validSources : sources;
+    return SOURCE_PRIORITY
+      .map((p) => pool.find((s) => s.source.toLowerCase() === p))
+      .find(Boolean) ?? pool[0];
   }
 
   function handleCardClick(e: React.MouseEvent) {
