@@ -16,11 +16,15 @@ export default async function HomePage() {
 
   const live = filterFootball(liveAll);
   const today = filterFootball(todayAll);
-  const liveIds = new Set(live.map((m) => m.id));
-  // Also deduplicate by stream source keys — same match can appear in both APIs
-  // with different team name strings (e.g. "Congo DR" vs "DR Congo"), giving different IDs
+
+  // Check ESPN status for live matches — streamed.pk's live feed can lag after a match ends
+  const liveEnrichments = await getEnrichments(live);
+  const activeLive = live.filter((m) => !liveEnrichments.get(m.id)?.isFinished);
+
+  // Deduplicate today vs live by ID and stream source keys
+  const liveIds = new Set(activeLive.map((m) => m.id));
   const liveSourceKeys = new Set<string>(
-    live.flatMap((m) => m.sources.map((s) => `${s.source}:${s.id}`))
+    activeLive.flatMap((m) => m.sources.map((s) => `${s.source}:${s.id}`))
   );
   const upcoming = today
     .filter((m) =>
@@ -29,7 +33,8 @@ export default async function HomePage() {
     )
     .sort((a, b) => a.date - b.date);
 
-  const allMatches = [...live, ...upcoming];
+  const allMatches = [...activeLive, ...upcoming];
+  // Next.js fetch cache means ESPN responses from liveEnrichments are reused here
   const enrichments = await getEnrichments(allMatches);
 
   return (

@@ -20,7 +20,7 @@ interface ESPNCompetitor {
 interface ESPNEvent {
   id?: string;
   date?: string;
-  status?: { type?: { name?: string; shortDetail?: string } };
+  status?: { displayClock?: string; type?: { name?: string; shortDetail?: string } };
   competitions?: Array<{
     competitors?: ESPNCompetitor[];
     venue?: { fullName?: string; address?: ESPNAddress };
@@ -53,6 +53,10 @@ async function fetchESPNEvents(dateStr: string): Promise<ESPNEvent[]> {
   }
 }
 
+function isFinishedStatus(statusName: string): boolean {
+  return statusName === "STATUS_FULL_TIME" || statusName === "STATUS_FINAL";
+}
+
 export async function getEnrichments(
   matches: Match[]
 ): Promise<Map<string, MatchEnrichment>> {
@@ -77,7 +81,7 @@ export async function getEnrichments(
   // Build team-key → enrichment map from all ESPN events
   const espnLookup = new Map<
     string,
-    { score?: { home: number; away: number }; clock?: string; venue?: MatchEnrichment["venue"] }
+    { score?: { home: number; away: number }; clock?: string; venue?: MatchEnrichment["venue"]; isFinished: boolean }
   >();
 
   for (const { events } of espnByDate) {
@@ -92,11 +96,11 @@ export async function getEnrichments(
 
       const key = teamKey(home.team.displayName, away.team.displayName);
       const statusName = event.status?.type?.name ?? "";
+      const finished = isFinishedStatus(statusName);
       const isActive =
         statusName !== "" &&
         statusName !== "STATUS_SCHEDULED" &&
-        statusName !== "STATUS_FULL_TIME" &&
-        statusName !== "STATUS_FINAL";
+        !finished;
       const hasScore =
         statusName !== "STATUS_SCHEDULED" &&
         statusName !== "" &&
@@ -114,12 +118,9 @@ export async function getEnrichments(
           : undefined,
         clock: isActive && shortDetail ? shortDetail : undefined,
         venue: venue?.fullName
-          ? {
-              stadium: venue.fullName,
-              city: city ?? "",
-              country: region ?? "",
-            }
+          ? { stadium: venue.fullName, city: city ?? "", country: region ?? "" }
           : undefined,
+        isFinished: finished,
       });
     }
   }
@@ -137,6 +138,7 @@ export async function getEnrichments(
       score: espn.score,
       clock: espn.clock,
       venue: espn.venue,
+      isFinished: espn.isFinished,
     });
   }
 
@@ -155,7 +157,8 @@ export async function getPastMatches(days = 1): Promise<PastMatch[]> {
 
   for (const events of allEvents) {
     for (const event of events) {
-      if (event.status?.type?.name !== "STATUS_FULL_TIME") continue;
+      const statusName = event.status?.type?.name ?? "";
+      if (!isFinishedStatus(statusName)) continue;
 
       const comp = event.competitions?.[0];
       if (!comp) continue;
@@ -172,7 +175,6 @@ export async function getPastMatches(days = 1): Promise<PastMatch[]> {
       const venue = comp.venue;
       const city = venue?.address?.city;
       const region = venue?.address?.state ?? venue?.address?.country;
-
       results.push({
         id: event.id ?? `${home.team.displayName}-${away.team.displayName}`,
         date: event.date ? new Date(event.date).getTime() : 0,
@@ -184,6 +186,7 @@ export async function getPastMatches(days = 1): Promise<PastMatch[]> {
         venue: venue?.fullName
           ? { stadium: venue.fullName, city: city ?? "", country: region ?? "" }
           : undefined,
+        matchTime: event.status?.displayClock,
       });
     }
   }

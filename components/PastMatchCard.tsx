@@ -33,17 +33,27 @@ function formatTime(ms: number): string {
   });
 }
 
-const ftBadge = (
-  <span
-    className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest shrink-0"
-    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.40)" }}
-  >
-    FT
-  </span>
-);
+
+function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
+  const label = matchTime ?? "FT";
+  // Amber if match went beyond 90 minutes (injury time or extra time)
+  const isOvertime = label !== "FT" && !label.startsWith("90'") && label !== "90:00";
+  return (
+    <span
+      className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest shrink-0"
+      style={{
+        background: isOvertime ? "rgba(251,191,36,0.08)" : "rgba(255,255,255,0.06)",
+        border: `1px solid ${isOvertime ? "rgba(251,191,36,0.25)" : "rgba(255,255,255,0.12)"}`,
+        color: isOvertime ? "rgba(251,191,36,0.70)" : "rgba(255,255,255,0.40)",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function PastMatchCard({ match }: { match: PastMatch }) {
-  const { homeTeam, awayTeam, homeBadge, awayBadge, score, venue, date } = match;
+  const { homeTeam, awayTeam, homeBadge, awayBadge, score, venue, date, matchTime } = match;
 
   const scoreEl = (
     <div
@@ -81,7 +91,7 @@ export function PastMatchCard({ match }: { match: PastMatch }) {
             <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(date)}</span>
             <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{formatTime(date)}</span>
           </div>
-          {ftBadge}
+          <MatchTimeBadge matchTime={matchTime} />
         </div>
 
         <div className="flex items-center gap-2">
@@ -134,7 +144,7 @@ export function PastMatchCard({ match }: { match: PastMatch }) {
           </div>
         </div>
 
-        <div className="flex justify-end">{ftBadge}</div>
+        <div className="flex justify-end"><MatchTimeBadge matchTime={matchTime} /></div>
       </div>
     </div>
   );

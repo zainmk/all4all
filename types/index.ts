@@ -37,6 +37,7 @@ export interface MatchEnrichment {
   score?: { home: number; away: number };
   clock?: string;
   venue?: { stadium: string; city: string; country: string };
+  isFinished?: boolean;
 }
 
 export interface PastMatch {
@@ -48,4 +49,5 @@ export interface PastMatch {
   awayBadge?: string;
   score: { home: number; away: number };
   venue?: { stadium: string; city: string; country: string };
+  matchTime?: string;
 }
