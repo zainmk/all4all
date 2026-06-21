@@ -10,7 +10,7 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "FIFA26",
+  title: "FIFA | 26",
   description: "Watch live and upcoming football matches",
 };
 
