@@ -5,7 +5,6 @@ import { PastMatchCard } from "@/components/PastMatchCard";
 import { RefreshLive } from "@/components/RefreshLive";
 import { ScrollToNow } from "@/components/ScrollToNow";
 import { AppHeader } from "@/components/AppHeader";
-import { BracketPanel } from "@/components/BracketPanel";
 import { getBracketData } from "@/lib/bracket";
 
 export const revalidate = 30;
@@ -99,7 +98,7 @@ export default async function HomePage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px] rounded-full opacity-10" style={{ background: "radial-gradient(ellipse, #1d4ed8 0%, transparent 70%)" }} />
       </div>
 
-      <AppHeader />
+      <AppHeader bracketData={bracketData} matchKeyToId={matchKeyToId} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-3">
         {past.length === 0 && displayMatches.length === 0 && (
@@ -111,8 +110,6 @@ export default async function HomePage() {
             <PastMatchCard match={m} />
           </div>
         ))}
-
-        <BracketPanel data={bracketData} matchKeyToId={matchKeyToId} />
 
         {/* "Now" divider — sits between past and present/future */}
         {past.length > 0 && displayMatches.length > 0 && (
