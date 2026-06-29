@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Barlow_Condensed } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -19,7 +20,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable} ${barlowCondensed.variable} h-full`}>
-      <body className="min-h-full antialiased" style={{ background: "#090d1f" }}>{children}</body>
+      <body className="min-h-full antialiased" style={{ background: "#090d1f" }}>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
