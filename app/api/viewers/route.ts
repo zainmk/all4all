@@ -30,5 +30,5 @@ export async function GET(req: NextRequest) {
   );
 
   const best = results.reduce((a, b) => (b.viewers > a.viewers ? b : a), results[0]);
-  return Response.json(best);
+  return Response.json({ best, all: results });
 }

@@ -64,7 +64,9 @@ export function MatchCard({
     return () => window.removeEventListener("highlightMatch", onHighlight);
   }, [match.id]);
 
+  const ADMIN_THRESHOLD = 10_000;
   const [bestSource, setBestSource] = useState<MatchSource | null>(null);
+  const [adminViewers, setAdminViewers] = useState(0);
 
   useEffect(() => {
     if (sources.length === 0) return;
@@ -72,10 +74,14 @@ export function MatchCard({
     const query = sources.map((s) => `${s.source}:${s.id}`).join(",");
     fetch(`/api/viewers?sources=${encodeURIComponent(query)}`)
       .then((r) => r.json())
-      .then((best) => {
-        if (cancelled || !best) return;
-        const matched = sources.find((s) => s.source === best.source && s.id === best.id);
-        if (matched) setBestSource(matched);
+      .then(({ best, all }: { best: { source: string; id: string } | null; all: { source: string; viewers: number }[] }) => {
+        if (cancelled) return;
+        if (best) {
+          const matched = sources.find((s) => s.source === best.source && s.id === best.id);
+          if (matched) setBestSource(matched);
+        }
+        const adminData = all?.find((r) => r.source === "admin");
+        setAdminViewers(adminData?.viewers ?? 0);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -89,9 +95,12 @@ export function MatchCard({
       // echo and admin work on mobile; prefer echo, fall back to admin
       target = sources.find((s) => s.source === "echo") ?? sources.find((s) => s.source === "admin");
     } else {
-      // Desktop: custom URL sources take priority, then highest-viewer source
-      const customSource = sources.find((s) => s.url);
-      target = customSource ?? bestSource ?? sources[0];
+      // Desktop: admin (if >10k viewers) → tsn/footy → highest-viewer → first
+      const adminSource = adminViewers >= ADMIN_THRESHOLD
+        ? sources.find((s) => s.source === "admin" && !s.url)
+        : undefined;
+      const footybiteSource = sources.find((s) => s.url);
+      target = adminSource ?? footybiteSource ?? bestSource ?? sources[0];
     }
     if (!target) return;
     window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
@@ -136,7 +145,11 @@ export function MatchCard({
     <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>vs</span>
   );
 
-  const streamBadges = sources.map((s) => (
+  const visibleSources = sources.filter(
+    (s) => !(s.source === "admin" && !s.url && adminViewers < ADMIN_THRESHOLD)
+  );
+
+  const streamBadges = visibleSources.map((s) => (
     <a
       key={`${s.source}:${s.id}`}
       href={s.url ?? embedUrl(s.source, s.id)}

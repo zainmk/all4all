@@ -1,7 +1,7 @@
 import { getLiveMatches, getTodayMatches, filterFootball } from "@/lib/api";
 import { getESPNMatchRange, teamKey } from "@/lib/espn";
 import { getCustomStreams } from "@/lib/custom-streams";
-import { getSportekMatchUrls } from "@/lib/sportek";
+import { getFootybiteStreams } from "@/lib/footybite";
 import { MatchCard } from "@/components/MatchCard";
 import { PastMatchCard } from "@/components/PastMatchCard";
 import { RefreshLive } from "@/components/RefreshLive";
@@ -13,12 +13,14 @@ import type { ESPNMatch, MatchSource } from "@/types";
 export const revalidate = 30;
 
 export default async function HomePage() {
-  const [espnMatches, liveAll, todayAll, bracketData, sportekUrls] = await Promise.all([
+  const now = Date.now();
+
+  // Phase 1: core data in parallel
+  const [espnMatches, liveAll, todayAll, bracketData] = await Promise.all([
     getESPNMatchRange(3, 3),
     getLiveMatches(),
     getTodayMatches(),
     getBracketData(),
-    getSportekMatchUrls(),
   ]);
 
   const streamsDown = liveAll === null && todayAll === null;
@@ -33,25 +35,32 @@ export default async function HomePage() {
     const key = teamKey(home, away);
     const existing = streamLookup.get(key) ?? [];
     for (const s of m.sources) {
+      if (s.source !== "admin" && s.source !== "echo") continue;
       if (!existing.some((e) => e.source === s.source && e.id === s.id)) existing.push(s);
     }
     streamLookup.set(key, existing);
   }
 
-  // Attach streams and split into past vs active/upcoming/future
-  const now = Date.now();
+  // Phase 2: fetch footybite streams for active/upcoming matches in parallel
+  // (past matches don't need streams; future matches return empty quickly and are cached)
+  const activeEspn = espnMatches.filter(
+    (m) => !m.isFinished || (m.hideAfterMs !== undefined && now < m.hideAfterMs)
+  );
+  const footybiteResults = await Promise.all(
+    activeEspn.map(async (m) => ({
+      key: teamKey(m.homeTeam.name, m.awayTeam.name),
+      sources: await getFootybiteStreams(m.homeTeam.name, m.awayTeam.name),
+    }))
+  );
+  const footybiteMap = new Map(footybiteResults.map((r) => [r.key, r.sources]));
+
+  // Combine all sources: custom → footybite → streamed.pk
   const allMatches: ESPNMatch[] = espnMatches.map((m) => {
     const key = teamKey(m.homeTeam.name, m.awayTeam.name);
     const custom = getCustomStreams(m.homeTeam.name, m.awayTeam.name);
+    const footybite = footybiteMap.get(key) ?? [];
     const streamed = streamLookup.get(key) ?? [];
-
-    // Add sportek source if found and not already covered by a custom entry with the same URL
-    const sportekUrl = sportekUrls.get(key);
-    const sportekSource = sportekUrl && !custom.some((c) => c.url === sportekUrl)
-      ? [{ source: "sportek", id: `sportek-${m.id}`, url: sportekUrl }]
-      : [];
-
-    return { ...m, sources: [...custom, ...sportekSource, ...streamed] };
+    return { ...m, sources: [...custom, ...footybite, ...streamed] };
   });
 
   const past = allMatches.filter(
