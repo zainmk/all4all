@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Match, MatchEnrichment, MatchSource } from "@/types";
-import { badgeUrl, embedUrl, usableSources } from "@/lib/api";
+import type { ESPNMatch, MatchSource } from "@/types";
+import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
 
-function TeamBadge({ badge, name, className = "w-10 h-10" }: { badge?: string; name?: string; className?: string }) {
+function TeamBadge({ logo, name, className = "w-10 h-10" }: { logo?: string; name?: string; className?: string }) {
   const [failed, setFailed] = useState(false);
-  if (!badge || failed) return <TeamFlag name={name} className={className} />;
+  if (!logo || failed) return <TeamFlag name={name} className={className} />;
   return (
     <img
-      src={badgeUrl(badge)}
+      src={logo}
       alt={name ?? "Team"}
       className={`${className} object-contain shrink-0`}
       onError={() => setFailed(true)}
@@ -43,16 +43,11 @@ function timeUntil(ms: number): string {
 export function MatchCard({
   match,
   isLive,
-  enrichment,
 }: {
-  match: Match;
-  isLive?: boolean;
-  enrichment?: MatchEnrichment;
+  match: ESPNMatch;
+  isLive: boolean;
 }) {
-  const sources = usableSources(match.sources);
-  const score = enrichment?.score;
-  const clock = enrichment?.clock;
-  const venue = enrichment?.venue;
+  const { sources, date: kickoffMs } = match;
 
   const [isHovered, setIsHovered] = useState(false);
   const [isHighlighted, setIsHighlighted] = useState(false);
@@ -69,7 +64,6 @@ export function MatchCard({
     return () => window.removeEventListener("highlightMatch", onHighlight);
   }, [match.id]);
 
-  // Pre-computed best source by total viewer count across streams. Falls back to sources[0].
   const [bestSource, setBestSource] = useState<MatchSource | null>(null);
 
   useEffect(() => {
@@ -90,9 +84,12 @@ export function MatchCard({
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
     const isMobile = window.innerWidth < 768;
+    // Custom URL sources always take priority as the default click target
+    const customSource = sources.find((s) => s.url);
     let target: MatchSource | null | undefined;
-    if (isMobile) {
-      // Only admin and echo work on mobile; prefer whichever has the highest viewer count
+    if (customSource) {
+      target = customSource;
+    } else if (isMobile) {
       const mobileOk = bestSource?.source === "admin" || bestSource?.source === "echo";
       target = mobileOk ? bestSource
         : sources.find((s) => s.source === "echo") ?? sources.find((s) => s.source === "admin");
@@ -100,7 +97,7 @@ export function MatchCard({
       target = bestSource ?? sources[0];
     }
     if (!target) return;
-    window.open(embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
+    window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
   }
 
   const liveIndicator = isLive ? (
@@ -110,14 +107,14 @@ export function MatchCard({
         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" style={{ boxShadow: "0 0 6px rgba(239,68,68,0.8)" }} />
       </span>
       <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: "#ef4444", textShadow: "0 0 12px rgba(239,68,68,0.5)" }}>
-        Live{clock ? <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 600 }}> · {clock}</span> : null}
+        Live{match.clock ? <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 600 }}> · {match.clock}</span> : null}
       </span>
     </div>
   ) : (
-    <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>{timeUntil(match.date)}</span>
+    <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>{timeUntil(kickoffMs)}</span>
   );
 
-  const scoreOrVs = score !== undefined ? (
+  const scoreOrVs = match.score !== undefined ? (
     <div
       className="flex items-center justify-center px-3 py-1 rounded-lg"
       style={{
@@ -135,7 +132,7 @@ export function MatchCard({
           letterSpacing: "0.05em",
         }}
       >
-        {score.home} <span className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>-</span> {score.away}
+        {match.score.home} <span className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>-</span> {match.score.away}
       </span>
     </div>
   ) : (
@@ -145,7 +142,7 @@ export function MatchCard({
   const streamBadges = sources.map((s) => (
     <a
       key={`${s.source}:${s.id}`}
-      href={embedUrl(s.source, s.id)}
+      href={s.url ?? embedUrl(s.source, s.id)}
       target="_blank"
       rel="noopener noreferrer"
       className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150"
@@ -196,29 +193,29 @@ export function MatchCard({
         <div className="flex items-center justify-between">
           {liveIndicator}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(match.date)}</span>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatTime(match.date)}</span>
+            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatTime(kickoffMs)}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.teams?.home?.name ?? "Home"}</span>
-            <TeamBadge badge={match.teams?.home?.badge} name={match.teams?.home?.name} className="w-7 h-7" />
+            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-7 h-7" />
           </div>
           <div className="shrink-0 w-14 flex items-center justify-center">{scoreOrVs}</div>
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <TeamBadge badge={match.teams?.away?.badge} name={match.teams?.away?.name} className="w-7 h-7" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.teams?.away?.name ?? "Away"}</span>
+            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-7 h-7" />
+            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
           </div>
         </div>
 
-        {venue && (
+        {match.venue && (
           <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.40)" }}>
             <span className="font-semibold" style={{ color: "rgba(255,255,255,0.60)" }}>
-              {venue.city}{venue.country ? `, ${venue.country}` : ""}
+              {match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}
             </span>
-            {venue.stadium && <span> · {venue.stadium}</span>}
+            {match.venue.stadium && <span> · {match.venue.stadium}</span>}
           </p>
         )}
 
@@ -236,25 +233,25 @@ export function MatchCard({
       >
         <div className="flex flex-col gap-0.5">
           <div className="mb-0.5">{liveIndicator}</div>
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(match.date)}</span>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatTime(match.date)}</span>
-          {venue && (
+          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatTime(kickoffMs)}</span>
+          {match.venue && (
             <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-              <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.80)" }}>{venue.city}{venue.country ? `, ${venue.country}` : ""}</p>
-              <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>{venue.stadium}</p>
+              <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.80)" }}>{match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}</p>
+              <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>{match.venue.stadium}</p>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.teams?.home?.name ?? "Home"}</span>
-            <TeamBadge badge={match.teams?.home?.badge} name={match.teams?.home?.name} className="w-10 h-10" />
+            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-10" />
           </div>
           <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <TeamBadge badge={match.teams?.away?.badge} name={match.teams?.away?.name} className="w-10 h-10" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.teams?.away?.name ?? "Away"}</span>
+            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-10" />
+            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
           </div>
         </div>
 

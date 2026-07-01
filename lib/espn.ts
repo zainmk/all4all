@@ -1,4 +1,4 @@
-import type { Match, MatchEnrichment, PastMatch } from "@/types";
+import type { ESPNMatch } from "@/types";
 import { resolveAlias } from "@/lib/team-aliases";
 
 // ESPN public scoreboard API — no auth, no CORS issues
@@ -80,150 +80,81 @@ function parseMatchMinutes(displayClock?: string): number {
   return 95;
 }
 
-export async function getEnrichments(
-  matches: Match[]
-): Promise<Map<string, MatchEnrichment>> {
-  const enrichments = new Map<string, MatchEnrichment>();
-  if (matches.length === 0) return enrichments;
 
-  // Group streamed.pk matches by ESPN date string.
-  // Also include the previous UTC day per match — late US evening kickoffs
-  // (e.g. 9 PM ET = 1 AM UTC next day) are indexed by ESPN under the local date.
-  const uniqueDates = new Set<string>();
-  for (const m of matches) {
-    const ds = espnDateStr(m.date);
-    uniqueDates.add(ds);
-    uniqueDates.add(espnDateStr(m.date - 86_400_000)); // also query day before in UTC
-  }
+export async function getESPNMatchRange(
+  daysBack: number,
+  daysAhead: number
+): Promise<Omit<ESPNMatch, "sources">[]> {
+  const now = Date.now();
+  const startStr = espnDateStr(now - daysBack * 86_400_000);
+  const endStr = espnDateStr(now + daysAhead * 86_400_000);
 
-  // Fetch ESPN data for each unique date in parallel
-  const espnByDate = await Promise.all(
-    Array.from(uniqueDates).map(async (ds) => ({ ds, events: await fetchESPNEvents(ds) }))
-  );
-
-  // Build team-key → enrichment map from all ESPN events
-  const espnLookup = new Map<
-    string,
-    { score?: { home: number; away: number }; clock?: string; venue?: MatchEnrichment["venue"]; isFinished: boolean; hideAfterMs?: number }
-  >();
-
-  for (const { events } of espnByDate) {
-    for (const event of events) {
-      const comp = event.competitions?.[0];
-      if (!comp) continue;
-
-      const competitors = comp.competitors ?? [];
-      const home = competitors.find((c) => c.homeAway === "home");
-      const away = competitors.find((c) => c.homeAway === "away");
-      if (!home || !away) continue;
-
-      const key = teamKey(home.team.displayName, away.team.displayName);
-      const statusName = event.status?.type?.name ?? "";
-      const finished = isFinishedStatus(statusName);
-      const isActive =
-        statusName !== "" &&
-        statusName !== "STATUS_SCHEDULED" &&
-        !finished;
-      const hasScore =
-        statusName !== "STATUS_SCHEDULED" &&
-        statusName !== "" &&
-        home.score !== undefined &&
-        away.score !== undefined;
-
-      const venue = comp.venue;
-      const city = venue?.address?.city;
-      const region = venue?.address?.state ?? venue?.address?.country;
-      const shortDetail = event.status?.type?.shortDetail;
-
-      // For finished matches: compute end time from kickoff + parsed displayClock, then add 10 min grace.
-      let hideAfterMs: number | undefined;
-      if (finished && event.date) {
-        const kickoffMs = new Date(event.date).getTime();
-        const elapsedMs = parseMatchMinutes(event.status?.displayClock) * 60_000;
-        hideAfterMs = kickoffMs + elapsedMs + 10 * 60_000;
-      }
-
-      espnLookup.set(key, {
-        score: hasScore
-          ? { home: parseInt(home.score!, 10), away: parseInt(away.score!, 10) }
-          : undefined,
-        clock: isActive && shortDetail ? shortDetail : undefined,
-        venue: venue?.fullName
-          ? { stadium: venue.fullName, city: city ?? "", country: region ?? "" }
-          : undefined,
-        isFinished: finished,
-        hideAfterMs,
-      });
+  let events: ESPNEvent[] = [];
+  try {
+    const res = await fetch(`${ESPN_BASE}?dates=${startStr}-${endStr}&limit=100`, {
+      next: { revalidate: 30 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      events = (data.events ?? []) as ESPNEvent[];
     }
-  }
+  } catch { /* return empty on network error */ }
 
-  // Match each streamed.pk event to ESPN data by team names
-  for (const m of matches) {
-    const home = m.teams?.home?.name;
-    const away = m.teams?.away?.name;
+  const results: Omit<ESPNMatch, "sources">[] = [];
+  const seenIds = new Set<string>();
+
+  for (const event of events) {
+    if (!event.id || seenIds.has(event.id)) continue;
+    seenIds.add(event.id);
+
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+
+    const competitors = comp.competitors ?? [];
+    const home = competitors.find((c) => c.homeAway === "home");
+    const away = competitors.find((c) => c.homeAway === "away");
     if (!home || !away) continue;
 
-    const espn = espnLookup.get(teamKey(home, away));
-    if (!espn) continue;
+    const statusName = event.status?.type?.name ?? "";
+    const finished = isFinishedStatus(statusName);
+    const isLive = !finished && statusName !== "" && statusName !== "STATUS_SCHEDULED";
+    const hasScore =
+      statusName !== "STATUS_SCHEDULED" &&
+      statusName !== "" &&
+      home.score !== undefined &&
+      away.score !== undefined;
 
-    enrichments.set(m.id, {
-      score: espn.score,
-      clock: espn.clock,
-      venue: espn.venue,
-      isFinished: espn.isFinished,
-      hideAfterMs: espn.hideAfterMs,
-    });
-  }
+    const venue = comp.venue;
+    const city = venue?.address?.city;
+    const region = venue?.address?.state ?? venue?.address?.country;
+    const shortDetail = event.status?.type?.shortDetail;
 
-  return enrichments;
-}
-
-export async function getPastMatches(days = 1): Promise<PastMatch[]> {
-  // i=0 is today — catches matches that finished earlier in the day
-  const dateStrings = Array.from({ length: days + 1 }, (_, i) => {
-    const d = new Date(Date.now() - i * 86_400_000);
-    return d.toISOString().split("T")[0].replace(/-/g, "");
-  });
-
-  const allEvents = await Promise.all(dateStrings.map(fetchESPNEvents));
-
-  const results: PastMatch[] = [];
-
-  for (const events of allEvents) {
-    for (const event of events) {
-      const statusName = event.status?.type?.name ?? "";
-      if (!isFinishedStatus(statusName)) continue;
-
-      const comp = event.competitions?.[0];
-      if (!comp) continue;
-
-      const competitors = comp.competitors ?? [];
-      const home = competitors.find((c) => c.homeAway === "home");
-      const away = competitors.find((c) => c.homeAway === "away");
-      if (!home || !away) continue;
-
-      const homeScore = parseInt(home.score ?? "", 10);
-      const awayScore = parseInt(away.score ?? "", 10);
-      if (isNaN(homeScore) || isNaN(awayScore)) continue;
-
-      const venue = comp.venue;
-      const city = venue?.address?.city;
-      const region = venue?.address?.state ?? venue?.address?.country;
-      results.push({
-        id: event.id ?? `${home.team.displayName}-${away.team.displayName}`,
-        date: event.date ? new Date(event.date).getTime() : 0,
-        homeTeam: home.team.displayName,
-        awayTeam: away.team.displayName,
-        homeBadge: home.team.logo,
-        awayBadge: away.team.logo,
-        score: { home: homeScore, away: awayScore },
-        venue: venue?.fullName
-          ? { stadium: venue.fullName, city: city ?? "", country: region ?? "" }
-          : undefined,
-        matchTime: event.status?.type?.shortDetail,
-      });
+    let hideAfterMs: number | undefined;
+    if (finished && event.date) {
+      const kickoffMs = new Date(event.date).getTime();
+      const elapsedMs = parseMatchMinutes(event.status?.displayClock) * 60_000;
+      hideAfterMs = kickoffMs + elapsedMs + 10 * 60_000;
     }
+
+    results.push({
+      id: event.id,
+      date: event.date ? new Date(event.date).getTime() : 0,
+      homeTeam: { name: home.team.displayName, logo: home.team.logo },
+      awayTeam: { name: away.team.displayName, logo: away.team.logo },
+      score: hasScore
+        ? { home: parseInt(home.score!, 10), away: parseInt(away.score!, 10) }
+        : undefined,
+      clock: isLive && shortDetail ? shortDetail : undefined,
+      venue: venue?.fullName
+        ? { stadium: venue.fullName, city: city ?? "", country: region ?? "" }
+        : undefined,
+      isFinished: finished,
+      isLive,
+      matchTime: finished ? (shortDetail ?? "FT") : undefined,
+      hideAfterMs,
+    });
   }
 
   return results.sort((a, b) => a.date - b.date);
 }
+

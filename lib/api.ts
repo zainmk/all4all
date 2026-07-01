@@ -2,27 +2,27 @@ import type { Match, MatchSource } from "@/types";
 
 const BASE = "https://streamed.pk/api";
 
-export async function getLiveMatches(): Promise<Match[]> {
+export async function getLiveMatches(): Promise<Match[] | null> {
   try {
     const res = await fetch(`${BASE}/matches/live`, {
       next: { revalidate: 30 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     return res.json();
   } catch {
-    return [];
+    return null;
   }
 }
 
-export async function getTodayMatches(): Promise<Match[]> {
+export async function getTodayMatches(): Promise<Match[] | null> {
   try {
     const res = await fetch(`${BASE}/matches/all-today`, {
       next: { revalidate: 60 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     return res.json();
   } catch {
-    return [];
+    return null;
   }
 }
 

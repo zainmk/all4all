@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { PastMatch } from "@/types";
+import type { ESPNMatch } from "@/types";
 import { TeamFlag } from "@/components/TeamFlag";
 
-function TeamBadge({ badge, name, className = "w-10 h-7" }: { badge?: string; name?: string; className?: string }) {
+function TeamBadge({ logo, name, className = "w-10 h-7" }: { logo?: string; name?: string; className?: string }) {
   const [failed, setFailed] = useState(false);
-  if (!badge || failed) return <TeamFlag name={name} className={className} />;
+  if (!logo || failed) return <TeamFlag name={name} className={className} />;
   return (
     <img
-      src={badge}
+      src={logo}
       alt={name ?? "Team"}
       className={`${className} object-contain shrink-0`}
       style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}
@@ -20,19 +20,13 @@ function TeamBadge({ badge, name, className = "w-10 h-7" }: { badge?: string; na
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
+    weekday: "short", day: "numeric", month: "short",
   });
 }
 
 function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
-
 
 function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
   const upper = matchTime?.toUpperCase() ?? "FT";
@@ -52,9 +46,7 @@ function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
   );
 }
 
-export function PastMatchCard({ match }: { match: PastMatch }) {
-  const { homeTeam, awayTeam, homeBadge, awayBadge, score, venue, date, matchTime } = match;
-
+export function PastMatchCard({ match }: { match: ESPNMatch }) {
   const [isHighlighted, setIsHighlighted] = useState(false);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,6 +65,8 @@ export function PastMatchCard({ match }: { match: PastMatch }) {
     setIsHighlighted(false);
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
   }
+
+  const score = match.score ?? { home: 0, away: 0 };
 
   const scoreEl = (
     <div
@@ -111,68 +105,67 @@ export function PastMatchCard({ match }: { match: PastMatch }) {
       onMouseLeave={clearHighlight}
       onTouchStart={clearHighlight}
     >
-
-      {/* ── MOBILE layout (hidden at md+) ── */}
+      {/* ── MOBILE layout ── */}
       <div className="md:hidden flex flex-col gap-2 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(date)}</span>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{formatTime(date)}</span>
+            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(match.date)}</span>
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{formatTime(match.date)}</span>
           </div>
-          <MatchTimeBadge matchTime={matchTime} />
+          <MatchTimeBadge matchTime={match.matchTime} />
         </div>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{homeTeam}</span>
-            <TeamBadge badge={homeBadge} name={homeTeam} className="w-9 h-6" />
+            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-9 h-6" />
           </div>
           {scoreEl}
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <TeamBadge badge={awayBadge} name={awayTeam} className="w-9 h-6" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{awayTeam}</span>
+            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-9 h-6" />
+            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
           </div>
         </div>
 
-        {venue && (
+        {match.venue && (
           <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
             <span className="font-semibold" style={{ color: "rgba(255,255,255,0.50)" }}>
-              {venue.city}{venue.country ? `, ${venue.country}` : ""}
+              {match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}
             </span>
-            {venue.stadium && <span> · {venue.stadium}</span>}
+            {match.venue.stadium && <span> · {match.venue.stadium}</span>}
           </p>
         )}
       </div>
 
-      {/* ── DESKTOP layout (hidden below md) ── */}
+      {/* ── DESKTOP layout ── */}
       <div
         className="hidden md:grid items-center gap-6 px-5 py-4"
         style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
       >
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(date)}</span>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatTime(date)}</span>
-          {venue && (
+          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(match.date)}</span>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatTime(match.date)}</span>
+          {match.venue && (
             <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.70)" }}>{venue.city}{venue.country ? `, ${venue.country}` : ""}</p>
-              <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.30)" }}>{venue.stadium}</p>
+              <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.70)" }}>{match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}</p>
+              <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.30)" }}>{match.venue.stadium}</p>
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-center gap-3">
           <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{homeTeam}</span>
-            <TeamBadge badge={homeBadge} name={homeTeam} className="w-10 h-7" />
+            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-7" />
           </div>
           {scoreEl}
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <TeamBadge badge={awayBadge} name={awayTeam} className="w-10 h-7" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{awayTeam}</span>
+            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-7" />
+            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
           </div>
         </div>
 
-        <div className="flex justify-end"><MatchTimeBadge matchTime={matchTime} /></div>
+        <div className="flex justify-end"><MatchTimeBadge matchTime={match.matchTime} /></div>
       </div>
     </div>
   );

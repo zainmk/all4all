@@ -1,47 +1,29 @@
-export interface TeamInfo {
-  name: string;
-  badge: string;
-}
-
-export interface Teams {
-  home?: TeamInfo;
-  away?: TeamInfo;
-}
-
 export interface MatchSource {
   source: string;
   id: string;
+  url?: string; // direct link override (bypasses embed.st)
 }
 
+// Used by streamed.pk API helpers only
+export interface TeamInfo { name: string; badge: string; }
+export interface Teams { home?: TeamInfo; away?: TeamInfo; }
 export interface Match {
-  id: string;
-  title: string;
-  category: string;
-  date: number;
-  poster?: string;
-  popular?: boolean;
-  teams?: Teams;
-  sources: MatchSource[];
+  id: string; title: string; category: string; date: number;
+  poster?: string; popular?: boolean; teams?: Teams; sources: MatchSource[];
 }
 
-
-export interface MatchEnrichment {
+// ESPN-first unified match — single type for all match cards
+export interface ESPNMatch {
+  id: string;
+  date: number;
+  homeTeam: { name: string; logo?: string };
+  awayTeam: { name: string; logo?: string };
   score?: { home: number; away: number };
   clock?: string;
   venue?: { stadium: string; city: string; country: string };
-  isFinished?: boolean;
-  // epoch ms after which this finished match should leave the active section (end time + 10 min grace)
-  hideAfterMs?: number;
-}
-
-export interface PastMatch {
-  id: string;
-  date: number;
-  homeTeam: string;
-  awayTeam: string;
-  homeBadge?: string;
-  awayBadge?: string;
-  score: { home: number; away: number };
-  venue?: { stadium: string; city: string; country: string };
+  isFinished: boolean;
+  isLive: boolean;
   matchTime?: string;
+  hideAfterMs?: number;
+  sources: MatchSource[];
 }
