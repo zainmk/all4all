@@ -2,6 +2,7 @@ import { getLiveMatches, getTodayMatches, filterFootball } from "@/lib/api";
 import { getESPNMatchRange, teamKey } from "@/lib/espn";
 import { getCustomStreams } from "@/lib/custom-streams";
 import { getFootybiteStreams } from "@/lib/footybite";
+import { getSportekMatchUrls } from "@/lib/sportek";
 import { MatchCard } from "@/components/MatchCard";
 import { PastMatchCard } from "@/components/PastMatchCard";
 import { RefreshLive } from "@/components/RefreshLive";
@@ -16,11 +17,12 @@ export default async function HomePage() {
   const now = Date.now();
 
   // Phase 1: core data in parallel
-  const [espnMatches, liveAll, todayAll, bracketData] = await Promise.all([
+  const [espnMatches, liveAll, todayAll, bracketData, sportekUrls] = await Promise.all([
     getESPNMatchRange(3, 3),
     getLiveMatches(),
     getTodayMatches(),
     getBracketData(),
+    getSportekMatchUrls(),
   ]);
 
   const streamsDown = liveAll === null && todayAll === null;
@@ -54,13 +56,17 @@ export default async function HomePage() {
   );
   const footybiteMap = new Map(footybiteResults.map((r) => [r.key, r.sources]));
 
-  // Combine all sources: custom → footybite → streamed.pk
+  // Combine all sources: custom → footybite → sportek → streamed.pk
   const allMatches: ESPNMatch[] = espnMatches.map((m) => {
     const key = teamKey(m.homeTeam.name, m.awayTeam.name);
     const custom = getCustomStreams(m.homeTeam.name, m.awayTeam.name);
     const footybite = footybiteMap.get(key) ?? [];
+    const sportekUrl = sportekUrls.get(key);
+    const sportek: MatchSource[] = sportekUrl
+      ? [{ source: "sportek", id: `sportek-${key}`, url: sportekUrl }]
+      : [];
     const streamed = streamLookup.get(key) ?? [];
-    return { ...m, sources: [...custom, ...footybite, ...streamed] };
+    return { ...m, sources: [...custom, ...footybite, ...sportek, ...streamed] };
   });
 
   const past = allMatches.filter(
