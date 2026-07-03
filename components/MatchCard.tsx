@@ -64,7 +64,7 @@ export function MatchCard({
     return () => window.removeEventListener("highlightMatch", onHighlight);
   }, [match.id]);
 
-  const ADMIN_THRESHOLD = 10_000;
+  const ADMIN_THRESHOLD = 5_000;
   const [bestSource, setBestSource] = useState<MatchSource | null>(null);
   const [adminViewers, setAdminViewers] = useState(0);
 
@@ -95,12 +95,15 @@ export function MatchCard({
       // echo and admin work on mobile; prefer echo, fall back to admin
       target = sources.find((s) => s.source === "echo") ?? sources.find((s) => s.source === "admin");
     } else {
-      // Desktop: admin (if >10k viewers) → tsn/footy → highest-viewer → first
-      const adminSource = adminViewers >= ADMIN_THRESHOLD
+      // Desktop: TSN → FOX → ITV1 → BBC → admin (≥5k) → sportek → highest-viewer → first
+      const tsnSrc = sources.find((s) => s.source === "tsn");
+      const foxSrc = sources.find((s) => s.source === "fox");
+      const britishSrc = sources.find((s) => s.source === "itv1") ?? sources.find((s) => s.source === "bbc");
+      const adminSrc = adminViewers >= ADMIN_THRESHOLD
         ? sources.find((s) => s.source === "admin" && !s.url)
         : undefined;
-      const footybiteSource = sources.find((s) => s.url);
-      target = adminSource ?? footybiteSource ?? bestSource ?? sources[0];
+      const sportekSrc = sources.find((s) => s.source === "sportek");
+      target = tsnSrc ?? foxSrc ?? britishSrc ?? adminSrc ?? sportekSrc ?? bestSource ?? sources[0];
     }
     if (!target) return;
     window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
