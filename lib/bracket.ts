@@ -53,16 +53,16 @@ async function fetchRange(dateRange: string): Promise<unknown[]> {
   }
 }
 
-// R32 display order derived from ESPN bracket slot assignments and Wikipedia 2026 WC bracket structure.
-// Each consecutive pair (2i, 2i+1) feeds the same R16 match:
-//   positions 0-1  → R16 #0 (Houston):       slots 1+3  = RSA/CAN + NED/MAR
-//   positions 2-3  → R16 #1 (Philadelphia):  slots 2+5  = GER/PAR + FRA/SWE
-//   positions 4-5  → R16 #2 (E. Rutherford): slots 4+6  = BRA/JPN + CIV/NOR
-//   positions 6-7  → R16 #3 (Mexico City):   slots 7+8  = MEX/ECU + ENG/COD
-//   positions 8-9  → R16 #4 (Arlington):     slots 11+12 = AUS/EGY + ARG/CPV
-//   positions 10-11→ R16 #5 (Seattle):       slots 9+10  = USA/BIH + BEL/SEN
-//   positions 12-13→ R16 #6 (Atlanta):       slots 14+16 = POR/CRO + ESP/AUT
-//   positions 14-15→ R16 #7 (Vancouver):     slots 13+15 = SUI/ALG + COL/GHA
+// R32 display order derived from ESPN bracket slot assignments and 2026 WC bracket structure.
+// Each consecutive pair (2i, 2i+1) feeds the same R16 match (sorted by R16 date):
+//   positions 0-1  → R16 #0 (Houston):       RSA/CAN + NED/MAR
+//   positions 2-3  → R16 #1 (Philadelphia):  GER/PAR + FRA/SWE
+//   positions 4-5  → R16 #2 (E. Rutherford): BRA/JPN + CIV/NOR
+//   positions 6-7  → R16 #3 (Mexico City):   MEX/ECU + ENG/COD
+//   positions 8-9  → R16 #4 (AT&T/Arlington):POR/CRO + ESP/AUT  ← POR vs ESP (760506)
+//   positions 10-11→ R16 #5 (Seattle):       USA/BIH + BEL/SEN
+//   positions 12-13→ R16 #6 (Atlanta):       AUS/EGY + ARG/CPV
+//   positions 14-15→ R16 #7 (Vancouver):     SUI/ALG + COL/GHA
 const R32_DISPLAY_ORDER: Record<string, number> = {
   "760486": 0,   // RSA vs CAN
   "760488": 1,   // NED vs MAR
@@ -72,12 +72,12 @@ const R32_DISPLAY_ORDER: Record<string, number> = {
   "760490": 5,   // CIV vs NOR
   "760491": 6,   // MEX vs ECU
   "760495": 7,   // ENG vs COD
-  "760499": 8,   // AUS vs EGY
-  "760500": 9,   // ARG vs CPV
+  "760496": 8,   // POR vs CRO → feeds AT&T/Arlington R16 (POR vs ESP)
+  "760497": 9,   // ESP vs AUT → feeds AT&T/Arlington R16 (POR vs ESP)
   "760494": 10,  // USA vs BIH
   "760493": 11,  // BEL vs SEN
-  "760496": 12,  // POR vs CRO
-  "760497": 13,  // ESP vs AUT
+  "760499": 12,  // AUS vs EGY → feeds Atlanta R16
+  "760500": 13,  // ARG vs CPV → feeds Atlanta R16
   "760498": 14,  // SUI vs ALG
   "760501": 15,  // COL vs GHA
 };
