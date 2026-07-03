@@ -33,8 +33,8 @@ const SLUG_OVERRIDES: Record<string, string> = {
   // Trinidad & Tobago
   "Trinidad and Tobago":      "trinidad-tobago",
   "Trinidad & Tobago":        "trinidad-tobago",
-  // Cape Verde
-  "Cape Verde":               "cape-verde",
+  // Cape Verde (footybite uses the longer "islands" form)
+  "Cape Verde":               "cape-verde-islands",
 };
 
 // Fix for category-1 mismatches: treat hyphens as word separators before stripping,
