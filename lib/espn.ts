@@ -157,7 +157,7 @@ export async function getESPNMatchRange(
       .map((d) => ({
         scorer: lastName(d.athletesInvolved?.[0]?.displayName ?? ""),
         minute: d.clock?.displayValue ?? "",
-        team: d.team?.id === homeId ? "home" : "away",
+        team: (d.team?.id === homeId ? "home" : "away") as "home" | "away",
       }))
       .filter((g) => g.scorer);
 
