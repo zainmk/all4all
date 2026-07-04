@@ -6,8 +6,9 @@
 //
 // Known mismatches:
 const ALIASES: Record<string, string> = {
-  "congodr": "drcongo",        // ESPN "Congo DR" vs streamed.pk "DR Congo"
-  "unitedstates": "usa",       // ESPN "United States" vs streamed.pk "USA"
+  "congodr": "drcongo",              // ESPN "Congo DR" vs streamed.pk "DR Congo"
+  "unitedstates": "usa",             // ESPN "United States" vs streamed.pk "USA"
+  "capeverdeislands": "capeverde",   // streamed.pk "Cape Verde Islands" vs ESPN "Cape Verde"
 };
 
 export function resolveAlias(normalized: string): string {
