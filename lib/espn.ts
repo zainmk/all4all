@@ -1,4 +1,4 @@
-import type { ESPNMatch } from "@/types";
+import type { ESPNMatch, GoalEvent } from "@/types";
 import { resolveAlias } from "@/lib/team-aliases";
 
 // ESPN public scoreboard API — no auth, no CORS issues
@@ -14,7 +14,16 @@ interface ESPNAddress {
 interface ESPNCompetitor {
   homeAway: "home" | "away";
   score?: string;
-  team: { displayName: string; logo?: string };
+  winner?: boolean;
+  team: { id?: string; displayName: string; logo?: string };
+}
+
+interface ESPNDetail {
+  scoringPlay?: boolean;
+  type?: { id?: string; text?: string };
+  clock?: { displayValue?: string };
+  team?: { id?: string };
+  athletesInvolved?: Array<{ displayName?: string }>;
 }
 
 interface ESPNEvent {
@@ -24,7 +33,13 @@ interface ESPNEvent {
   competitions?: Array<{
     competitors?: ESPNCompetitor[];
     venue?: { fullName?: string; address?: ESPNAddress };
+    details?: ESPNDetail[];
   }>;
+}
+
+function lastName(full: string): string {
+  const parts = full.trim().split(" ");
+  return parts[parts.length - 1];
 }
 
 function normalize(name: string): string {
@@ -133,14 +148,24 @@ export async function getESPNMatchRange(
     if (finished && event.date) {
       const kickoffMs = new Date(event.date).getTime();
       const elapsedMs = parseMatchMinutes(event.status?.displayClock) * 60_000;
-      hideAfterMs = kickoffMs + elapsedMs + 10 * 60_000;
+      hideAfterMs = kickoffMs + elapsedMs + 30 * 60_000;
     }
+
+    const homeId = home.team.id;
+    const goals: GoalEvent[] = (comp.details ?? [])
+      .filter((d) => d.scoringPlay && !d.type?.text?.toLowerCase().includes("penalty"))
+      .map((d) => ({
+        scorer: lastName(d.athletesInvolved?.[0]?.displayName ?? ""),
+        minute: d.clock?.displayValue ?? "",
+        team: d.team?.id === homeId ? "home" : "away",
+      }))
+      .filter((g) => g.scorer);
 
     results.push({
       id: event.id,
       date: event.date ? new Date(event.date).getTime() : 0,
-      homeTeam: { name: home.team.displayName, logo: home.team.logo },
-      awayTeam: { name: away.team.displayName, logo: away.team.logo },
+      homeTeam: { name: home.team.displayName, logo: home.team.logo, winner: home.winner },
+      awayTeam: { name: away.team.displayName, logo: away.team.logo, winner: away.winner },
       score: hasScore
         ? { home: parseInt(home.score!, 10), away: parseInt(away.score!, 10) }
         : undefined,
@@ -152,6 +177,7 @@ export async function getESPNMatchRange(
       isLive,
       matchTime: finished ? (shortDetail ?? "FT") : undefined,
       hideAfterMs,
+      goals,
     });
   }
 

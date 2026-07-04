@@ -115,16 +115,33 @@ export function PastMatchCard({ match }: { match: ESPNMatch }) {
           <MatchTimeBadge matchTime={match.matchTime} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-9 h-6" />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+              <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: match.homeTeam.winner ? "rgba(255,255,255,0.95)" : match.awayTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-9 h-6" />
+            </div>
+            {scoreEl}
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-9 h-6" />
+              <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: match.awayTeam.winner ? "rgba(255,255,255,0.95)" : match.homeTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
+            </div>
           </div>
-          {scoreEl}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-9 h-6" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
-          </div>
+          {match.goals.length > 0 && (
+            <div className="flex gap-2 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <div className="flex-1 flex flex-col items-end gap-px">
+                {match.goals.filter((g) => g.team === "home").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+              <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreEl}</div>
+              <div className="flex-1 flex flex-col items-start gap-px">
+                {match.goals.filter((g) => g.team === "away").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {match.venue && (
@@ -153,16 +170,33 @@ export function PastMatchCard({ match }: { match: ESPNMatch }) {
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-3">
-          <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-7" />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+              <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: match.homeTeam.winner ? "rgba(255,255,255,0.95)" : match.awayTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
+              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-7" />
+            </div>
+            {scoreEl}
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-7" />
+              <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: match.awayTeam.winner ? "rgba(255,255,255,0.95)" : match.homeTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
+            </div>
           </div>
-          {scoreEl}
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-7" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
-          </div>
+          {match.goals.length > 0 && (
+            <div className="flex gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <div className="flex-1 flex flex-col items-end gap-px">
+                {match.goals.filter((g) => g.team === "home").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+              <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreEl}</div>
+              <div className="flex-1 flex flex-col items-start gap-px">
+                {match.goals.filter((g) => g.team === "away").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end"><MatchTimeBadge matchTime={match.matchTime} /></div>

@@ -5,6 +5,10 @@ import type { ESPNMatch, MatchSource } from "@/types";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
 
+function displayName(name: string): string {
+  return /winner|round of/i.test(name) ? "TBD" : name;
+}
+
 function TeamBadge({ logo, name, className = "w-10 h-10" }: { logo?: string; name?: string; className?: string }) {
   const [failed, setFailed] = useState(false);
   if (!logo || failed) return <TeamFlag name={name} className={className} />;
@@ -148,31 +152,35 @@ export function MatchCard({
     <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>vs</span>
   );
 
-  const visibleSources = sources.filter(
-    (s) => !(s.source === "admin" && !s.url && adminViewers < ADMIN_THRESHOLD)
-  );
+  // Only show stream badges from 30 min before kickoff through 30 min after finish
+  const showStreams = sources.length > 0 &&
+    (isLive || match.isFinished || Date.now() >= kickoffMs - 30 * 60_000);
 
-  const streamBadges = visibleSources.map((s) => (
-    <a
-      key={`${s.source}:${s.id}`}
-      href={s.url ?? embedUrl(s.source, s.id)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150"
-      style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)", color: "rgba(52,211,153,0.9)" }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = "rgba(52,211,153,0.18)";
-        (e.currentTarget as HTMLElement).style.borderColor = "rgba(52,211,153,0.5)";
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = "rgba(52,211,153,0.08)";
-        (e.currentTarget as HTMLElement).style.borderColor = "rgba(52,211,153,0.2)";
-      }}
-    >
-      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-      {s.source}
-    </a>
-  ));
+  const allBadges = sources;
+
+  function StreamBadge({ s }: { s: MatchSource }) {
+    return (
+      <a
+        href={s.url ?? embedUrl(s.source, s.id)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150"
+        style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)", color: "rgba(52,211,153,0.9)" }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = "rgba(52,211,153,0.18)";
+          (e.currentTarget as HTMLElement).style.borderColor = "rgba(52,211,153,0.5)";
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = "rgba(52,211,153,0.08)";
+          (e.currentTarget as HTMLElement).style.borderColor = "rgba(52,211,153,0.2)";
+        }}
+      >
+        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+        {s.source}
+      </a>
+    );
+  }
+
 
   return (
     <div
@@ -211,16 +219,33 @@ export function MatchCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-7 h-7" />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+              <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
+              <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-7 h-7" />
+            </div>
+            <div className="shrink-0 w-14 flex items-center justify-center">{scoreOrVs}</div>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-7 h-7" />
+              <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
+            </div>
           </div>
-          <div className="shrink-0 w-14 flex items-center justify-center">{scoreOrVs}</div>
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-7 h-7" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
-          </div>
+          {match.goals.length > 0 && (
+            <div className="flex gap-2 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <div className="flex-1 flex flex-col items-end gap-px">
+                {match.goals.filter((g) => g.team === "home").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+              <div className="shrink-0 w-14" />
+              <div className="flex-1 flex flex-col items-start gap-px">
+                {match.goals.filter((g) => g.team === "away").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {match.venue && (
@@ -232,9 +257,9 @@ export function MatchCard({
           </p>
         )}
 
-        {sources.length > 0 && (
+        {showStreams && (
           <div className="flex flex-wrap gap-1.5 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            {streamBadges}
+            {allBadges.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)}
           </div>
         )}
       </div>
@@ -256,21 +281,40 @@ export function MatchCard({
           )}
         </div>
 
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-            <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-            <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-10" />
+        <div className="flex flex-col gap-1 flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+              <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
+              <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-10 h-10" />
+            </div>
+            <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-10 h-10" />
+              <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
+            </div>
           </div>
-          <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-10" />
-            <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
-          </div>
+          {match.goals.length > 0 && (
+            <div className="flex gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <div className="flex-1 flex flex-col items-end gap-px">
+                {match.goals.filter((g) => g.team === "home").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+              <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreOrVs}</div>
+              <div className="flex-1 flex flex-col items-start gap-px">
+                {match.goals.filter((g) => g.team === "away").map((g, i) => (
+                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5 justify-end">
-          {streamBadges}
-        </div>
+        {showStreams && isHovered && (
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            {allBadges.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)}
+          </div>
+        )}
       </div>
     </div>
   );
