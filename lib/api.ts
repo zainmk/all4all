@@ -30,10 +30,6 @@ export function embedUrl(source: string, id: string, streamNo = 1): string {
   return `https://embed.st/embed/${source}/${id}/${streamNo}`;
 }
 
-export function badgeUrl(badge: string): string {
-  return `${BASE}/images/badge/${badge}.webp`;
-}
-
 export function filterFootball(matches: Match[]): Match[] {
   return matches.filter(
     (m) =>
@@ -43,6 +39,3 @@ export function filterFootball(matches: Match[]): Match[] {
   );
 }
 
-export function usableSources(sources: MatchSource[]): MatchSource[] {
-  return sources;
-}

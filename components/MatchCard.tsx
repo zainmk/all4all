@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ESPNMatch, MatchSource } from "@/types";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
@@ -54,23 +54,7 @@ export function MatchCard({
   const { sources, date: kickoffMs } = match;
 
   const [isHovered, setIsHovered] = useState(false);
-  const [isHighlighted, setIsHighlighted] = useState(false);
-  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    function onHighlight(e: Event) {
-      if ((e as CustomEvent).detail?.matchId !== match.id) return;
-      setIsHighlighted(true);
-      if (highlightTimer.current) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setIsHighlighted(false), 2500);
-    }
-    window.addEventListener("highlightMatch", onHighlight);
-    return () => window.removeEventListener("highlightMatch", onHighlight);
-  }, [match.id]);
-
-  const ADMIN_THRESHOLD = 5_000;
   const [bestSource, setBestSource] = useState<MatchSource | null>(null);
-  const [adminViewers, setAdminViewers] = useState(0);
 
   useEffect(() => {
     if (sources.length === 0) return;
@@ -84,8 +68,6 @@ export function MatchCard({
           const matched = sources.find((s) => s.source === best.source && s.id === best.id);
           if (matched) setBestSource(matched);
         }
-        const adminData = all?.find((r) => r.source === "admin");
-        setAdminViewers(adminData?.viewers ?? 0);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -99,13 +81,11 @@ export function MatchCard({
       // echo and admin work on mobile; prefer echo, fall back to admin
       target = sources.find((s) => s.source === "echo") ?? sources.find((s) => s.source === "admin");
     } else {
-      // Desktop: TSN → FOX → ITV1 → BBC → admin (≥5k) → sportek → highest-viewer → first
+      // Desktop: TSN → FOX → ITV1 → BBC → admin → sportek → highest-viewer → first
       const tsnSrc = sources.find((s) => s.source === "tsn");
       const foxSrc = sources.find((s) => s.source === "fox");
       const britishSrc = sources.find((s) => s.source === "itv1") ?? sources.find((s) => s.source === "bbc");
-      const adminSrc = adminViewers >= ADMIN_THRESHOLD
-        ? sources.find((s) => s.source === "admin" && !s.url)
-        : undefined;
+      const adminSrc = sources.find((s) => s.source === "admin" && !s.url);
       const sportekSrc = sources.find((s) => s.source === "sportek");
       target = tsnSrc ?? foxSrc ?? britishSrc ?? adminSrc ?? sportekSrc ?? bestSource ?? sources[0];
     }
@@ -184,28 +164,24 @@ export function MatchCard({
 
   return (
     <div
-      className="w-full transition-all duration-200 rounded-2xl cursor-pointer active:scale-[0.99]"
+      className="relative w-full transition-all duration-200 rounded-2xl cursor-pointer active:scale-[0.99]"
       style={{
-        background: (isHovered || isHighlighted)
+        background: (isHovered)
           ? "linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.06) 100%)"
           : "linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)",
         border: isLive
-          ? ((isHovered || isHighlighted) ? "1px solid rgba(239,68,68,0.45)" : "1px solid rgba(239,68,68,0.25)")
-          : ((isHovered || isHighlighted) ? "1px solid rgba(255,255,255,0.16)" : "1px solid rgba(255,255,255,0.08)"),
+          ? ((isHovered) ? "1px solid rgba(239,68,68,0.45)" : "1px solid rgba(239,68,68,0.25)")
+          : ((isHovered) ? "1px solid rgba(255,255,255,0.16)" : "1px solid rgba(255,255,255,0.08)"),
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         boxShadow: isLive
           ? "0 4px 32px rgba(239,68,68,0.12), 0 2px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)"
-          : ((isHovered || isHighlighted)
+          : ((isHovered)
             ? "0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.10)"
             : "0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)"),
       }}
       onClick={handleCardClick}
-      onMouseEnter={() => {
-        setIsHovered(true);
-        setIsHighlighted(false);
-        if (highlightTimer.current) clearTimeout(highlightTimer.current);
-      }}
+      onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
 
@@ -265,35 +241,55 @@ export function MatchCard({
       </div>
 
       {/* ── DESKTOP layout (hidden below md) ── */}
-      <div
-        className="hidden md:grid items-center gap-6 px-5 py-4"
-        style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
-      >
-        <div className="flex flex-col gap-0.5">
-          <div className="mb-0.5">{liveIndicator}</div>
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatTime(kickoffMs)}</span>
-          {match.venue && (
-            <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-              <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.80)" }}>{match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}</p>
-              <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>{match.venue.stadium}</p>
+      <div className="hidden md:flex flex-col px-5 pt-4 pb-3 gap-2">
+        {/* Main row: relative wrapper so badges align with the team row */}
+        <div className="relative">
+          <div
+            className="grid items-center gap-6"
+            style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
+          >
+            <div className="flex flex-col gap-0.5">
+              <div className="mb-0.5">{liveIndicator}</div>
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
+              <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatTime(kickoffMs)}</span>
+              {match.venue && (
+                <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                  <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.80)" }}>{match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}</p>
+                  <p className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>{match.venue.stadium}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+                <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
+                <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-10 h-10" />
+              </div>
+              <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-10 h-10" />
+                <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
+              </div>
+            </div>
+          </div>
+
+          {showStreams && isHovered && (
+            <div
+              className="flex absolute right-0 inset-y-0 flex-wrap gap-1.5 justify-end items-center"
+              style={{ width: "22%" }}
+            >
+              {allBadges.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)}
             </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-1 flex-1 min-w-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-              <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
-              <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-10 h-10" />
-            </div>
-            <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
-            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-10 h-10" />
-              <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
-            </div>
-          </div>
-          {match.goals.length > 0 && (
+        {/* Goals row: card expands below, aligned under the center column */}
+        {match.goals.length > 0 && (
+          <div
+            className="grid gap-6"
+            style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
+          >
+            <div />
             <div className="flex gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
               <div className="flex-1 flex flex-col items-end gap-px">
                 {match.goals.filter((g) => g.team === "home").map((g, i) => (
@@ -307,14 +303,10 @@ export function MatchCard({
                 ))}
               </div>
             </div>
-          )}
-        </div>
-
-        {showStreams && isHovered && (
-          <div className="flex flex-wrap gap-1.5 justify-end">
-            {allBadges.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)}
+            <div />
           </div>
         )}
+
       </div>
     </div>
   );

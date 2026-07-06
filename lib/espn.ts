@@ -152,8 +152,10 @@ export async function getESPNMatchRange(
     }
 
     const homeId = home.team.id;
+    // Only filter penalty-type plays for shootout matches; in regular play a penalty kick is a real goal
+    const isPenaltyShootout = statusName === "STATUS_FINAL_PEN";
     const goals: GoalEvent[] = (comp.details ?? [])
-      .filter((d) => d.scoringPlay && !d.type?.text?.toLowerCase().includes("penalty"))
+      .filter((d) => d.scoringPlay && !(isPenaltyShootout && d.type?.text?.toLowerCase().includes("penalty")))
       .map((d) => ({
         scorer: lastName(d.athletesInvolved?.[0]?.displayName ?? ""),
         minute: d.clock?.displayValue ?? "",

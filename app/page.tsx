@@ -8,7 +8,6 @@ import { PastMatchCard } from "@/components/PastMatchCard";
 import { RefreshLive } from "@/components/RefreshLive";
 import { ScrollToNow } from "@/components/ScrollToNow";
 import { AppHeader } from "@/components/AppHeader";
-import { getBracketData } from "@/lib/bracket";
 import type { ESPNMatch, MatchSource } from "@/types";
 
 export const revalidate = 30;
@@ -17,11 +16,10 @@ export default async function HomePage() {
   const now = Date.now();
 
   // Phase 1: core data in parallel
-  const [espnMatches, liveAll, todayAll, bracketData, sportekUrls] = await Promise.all([
+  const [espnMatches, liveAll, todayAll, sportekUrls] = await Promise.all([
     getESPNMatchRange(3, 3),
     getLiveMatches(),
     getTodayMatches(),
-    getBracketData(),
     getSportekMatchUrls(),
   ]);
 
@@ -76,12 +74,6 @@ export default async function HomePage() {
     (m) => !m.isFinished || (m.hideAfterMs !== undefined && now < m.hideAfterMs)
   );
 
-  // matchKeyToId for bracket panel highlight/scroll
-  const matchKeyToId: Record<string, string> = {};
-  for (const m of allMatches) {
-    matchKeyToId[teamKey(m.homeTeam.name, m.awayTeam.name)] = m.id;
-  }
-
   return (
     <div className="min-h-screen" style={{ background: "linear-gradient(160deg, #0d1a3a 0%, #090d1f 30%, #050508 60%, #080d0a 100%)" }}>
       <RefreshLive />
@@ -94,7 +86,7 @@ export default async function HomePage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px] rounded-full opacity-10" style={{ background: "radial-gradient(ellipse, #1d4ed8 0%, transparent 70%)" }} />
       </div>
 
-      <AppHeader bracketData={bracketData} matchKeyToId={matchKeyToId} />
+      <AppHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-3">
         {past.length === 0 && active.length === 0 && (

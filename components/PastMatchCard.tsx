@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ESPNMatch } from "@/types";
 import { TeamFlag } from "@/components/TeamFlag";
 
@@ -47,25 +47,6 @@ function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
 }
 
 export function PastMatchCard({ match }: { match: ESPNMatch }) {
-  const [isHighlighted, setIsHighlighted] = useState(false);
-  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    function onHighlight(e: Event) {
-      if ((e as CustomEvent).detail?.matchId !== match.id) return;
-      setIsHighlighted(true);
-      if (highlightTimer.current) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setIsHighlighted(false), 2500);
-    }
-    window.addEventListener("highlightMatch", onHighlight);
-    return () => window.removeEventListener("highlightMatch", onHighlight);
-  }, [match.id]);
-
-  function clearHighlight() {
-    setIsHighlighted(false);
-    if (highlightTimer.current) clearTimeout(highlightTimer.current);
-  }
-
   const score = match.score ?? { home: 0, away: 0 };
 
   const scoreEl = (
@@ -87,23 +68,17 @@ export function PastMatchCard({ match }: { match: ESPNMatch }) {
   );
 
   const cardStyle = {
-    background: isHighlighted
-      ? "linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.06) 100%)"
-      : "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
-    border: isHighlighted ? "1px solid rgba(255,255,255,0.16)" : "1px solid rgba(255,255,255,0.06)",
+    background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
+    border: "1px solid rgba(255,255,255,0.06)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
-    opacity: isHighlighted ? 1 : 0.65,
-    transition: "opacity 0.2s, background 0.2s, border-color 0.2s",
+    opacity: 0.65,
   };
 
   return (
     <div
       className="w-full rounded-2xl"
       style={cardStyle}
-      onMouseEnter={clearHighlight}
-      onMouseLeave={clearHighlight}
-      onTouchStart={clearHighlight}
     >
       {/* ── MOBILE layout ── */}
       <div className="md:hidden flex flex-col gap-2 px-4 py-3">
