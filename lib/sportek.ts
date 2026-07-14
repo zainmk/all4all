@@ -1,6 +1,6 @@
 import { teamKey } from "@/lib/espn";
 
-const BASE = "https://live.totalsportek.christmas";
+const BASE = "https://totalsportekx.is";
 
 // Sportek slugs use different names than ESPN in some cases.
 // Map sportek display name → ESPN display name so teamKey() matches.
@@ -25,7 +25,7 @@ async function fetchMatchUrls(path: string): Promise<Map<string, string>> {
     const res = await fetch(`${BASE}${path}`, { next: { revalidate: 300 } });
     if (!res.ok) return result;
     const html = await res.text();
-    const re = /href="(https:\/\/live\.totalsportek\.christmas\/([^/"]+)\/\d+)"/g;
+    const re = /href="(https:\/\/totalsportekx\.is\/game\/([^/"]+)\/\d+\/?)"/g;
     let m;
     while ((m = re.exec(html)) !== null) {
       const url = m[1];
