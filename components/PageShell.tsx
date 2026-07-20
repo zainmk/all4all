@@ -13,6 +13,7 @@ export function PageShell({
   leagueId,
   past,
   upcoming,
+  beforeNow,
   emptyMessage,
   nothingUpcomingMessage,
 }: {
@@ -21,6 +22,8 @@ export function PageShell({
   past: ReactNode[];
   /** Already-rendered cards for live + future events */
   upcoming: ReactNode[];
+  /** Optional card pinned directly above the NOW divider (e.g. season standings) */
+  beforeNow?: ReactNode;
   /** Shown when there is nothing at all */
   emptyMessage: string;
   /** Shown under the NOW divider when only past events exist */
@@ -56,6 +59,10 @@ export function PageShell({
         )}
 
         {past}
+
+        {/* Sits between what's happened and what's next — outside the divider's
+            conditional so it still appears before the season's first event. */}
+        {beforeNow}
 
         {/* NOW divider — always shown after past events */}
         {past.length > 0 && (

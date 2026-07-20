@@ -16,8 +16,17 @@ export interface PodiumEntry {
   position: number;
   rider: string;
   team: string;
-  /** Winner's race time, or the gap to first for P2/P3 */
+  /** Leader's time, or the gap to first for P2/P3 */
   time: string;
+  /** Championship points — absent for qualifying, which scores none */
+  points?: number;
+}
+
+/** Top three from each of the sessions worth showing for a finished round. */
+export interface RaceResults {
+  qualifying: PodiumEntry[];
+  sprint: PodiumEntry[];
+  race: PodiumEntry[];
 }
 
 /** One round of a race series — a multi-day event at a single circuit. */
@@ -33,8 +42,35 @@ export interface RaceEvent {
   dateEnd: number;
   isFinished: boolean;
   round: number;
-  podium: PodiumEntry[];
+  results: RaceResults;
   sources: MatchSource[];
+}
+
+export interface StandingEntry {
+  position: number;
+  /** Places gained (+) or lost (−) at the last round */
+  positionChange: number;
+  rider: string;
+  riderNumber: number;
+  countryIso: string;
+  team: string;
+  points: number;
+  raceWins: number;
+  podiums: number;
+  sprintWins: number;
+  /** Finish at each of the most recent rounds; null = did not finish/start */
+  recent: Array<{ round: string; position: number | null }>;
+}
+
+/** Everything needed to read the state of the championship at a glance. */
+export interface ChampionshipStatus {
+  year: number;
+  roundsComplete: number;
+  roundsTotal: number;
+  nextRound?: { name: string; dateStart: number };
+  /** Maximum points still winnable — 25 (race) + 12 (sprint) per round left */
+  pointsRemaining: number;
+  standings: StandingEntry[];
 }
 
 export interface GoalEvent {

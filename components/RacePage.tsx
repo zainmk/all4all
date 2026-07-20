@@ -1,8 +1,14 @@
-import { getMotoGPSeason, SPORTEK_ROUND_ALIASES, sourcesForRound } from "@/lib/motogp";
+import {
+  getMotoGPChampionship,
+  getMotoGPSeason,
+  SPORTEK_ROUND_ALIASES,
+  sourcesForRound,
+} from "@/lib/motogp";
 import { getSportekRaceIndex } from "@/lib/sportek";
 import { LEAGUES, type LeagueId, type RaceLeagueConfig } from "@/lib/leagues";
 import { PageShell } from "@/components/PageShell";
 import { RaceCard } from "@/components/RaceCard";
+import { StandingsCard } from "@/components/StandingsCard";
 import type { RaceEvent } from "@/types";
 
 export async function RacePage({ leagueId }: { leagueId: LeagueId }) {
@@ -13,6 +19,9 @@ export async function RacePage({ leagueId }: { leagueId: LeagueId }) {
     getMotoGPSeason(),
     getSportekRaceIndex(league.sportekPath, SPORTEK_ROUND_ALIASES),
   ]);
+
+  // Needs the rounds to know how far into the season we are
+  const championship = await getMotoGPChampionship(rounds);
 
   const events: RaceEvent[] = rounds.map((r) => ({
     ...r,
@@ -38,6 +47,9 @@ export async function RacePage({ leagueId }: { leagueId: LeagueId }) {
           <RaceCard event={e} league={league} isPast={false} isLive={isUnderWay(e)} />
         </div>
       ))}
+      beforeNow={
+        championship ? <StandingsCard status={championship} league={league} /> : null
+      }
       emptyMessage="No races found."
       nothingUpcomingMessage="Season complete — the next calendar isn't out yet."
     />

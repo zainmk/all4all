@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MatchSource, RaceEvent } from "@/types";
+import type { MatchSource, PodiumEntry, RaceEvent } from "@/types";
 import type { RaceLeagueConfig } from "@/lib/leagues";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
@@ -36,31 +36,64 @@ function daysUntil(ms: number): string {
 
 const POSITION_COLORS = ["#fbbf24", "#cbd5e1", "#d97706"];
 
-function Podium({ entries, muted }: { entries: RaceEvent["podium"]; muted: boolean }) {
+/** "Fabio Di Giannantonio" → "F. Di Giannantonio" — full names don't fit a column. */
+function shortRider(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  return `${parts[0][0]}. ${parts.slice(1).join(" ")}`;
+}
+
+function SessionResults({
+  label,
+  entries,
+  muted,
+}: {
+  label: string;
+  entries: PodiumEntry[];
+  muted: boolean;
+}) {
+  if (entries.length === 0) return null;
   return (
-    <div className="flex flex-col gap-0.5">
-      {entries.map((p, i) => (
-        <div key={p.position} className="flex items-baseline gap-2 text-[11px]">
-          <span
-            className="font-black tabular-nums w-3 shrink-0"
-            style={{ color: POSITION_COLORS[i] ?? "rgba(255,255,255,0.4)", opacity: muted ? 0.75 : 1 }}
-          >
-            {p.position}
-          </span>
-          <span
-            className="font-bold truncate uppercase tracking-wide"
-            style={{ color: muted ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}
-          >
-            {p.rider}
-          </span>
-          <span className="truncate hidden sm:inline" style={{ color: "rgba(255,255,255,0.30)" }}>
-            {p.team}
-          </span>
-          <span className="ml-auto tabular-nums shrink-0 pl-2" style={{ color: "rgba(255,255,255,0.45)" }}>
-            {p.time}
-          </span>
-        </div>
-      ))}
+    <div className="min-w-0">
+      <p
+        className="text-[9px] font-black uppercase tracking-widest mb-1 pb-1"
+        style={{ color: "rgba(255,255,255,0.28)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        {label}
+      </p>
+      <div className="flex flex-col gap-0.5">
+        {entries.map((p, i) => (
+          <div key={p.position} className="flex items-baseline gap-1.5 text-[11px]">
+            <span
+              className="font-black tabular-nums w-2 shrink-0"
+              style={{ color: POSITION_COLORS[i] ?? "rgba(255,255,255,0.4)", opacity: muted ? 0.75 : 1 }}
+            >
+              {p.position}
+            </span>
+            <span
+              className="font-bold truncate uppercase tracking-wide"
+              style={{ color: muted ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}
+              title={`${p.rider} · ${p.team}`}
+            >
+              {shortRider(p.rider)}
+            </span>
+            <span className="ml-auto tabular-nums shrink-0 pl-1" style={{ color: "rgba(255,255,255,0.40)" }}>
+              {p.points !== undefined ? `${p.points}` : p.time}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** All three sessions side by side. */
+function ResultsGrid({ results, muted }: { results: RaceEvent["results"]; muted: boolean }) {
+  return (
+    <div className="grid gap-x-5 gap-y-3 grid-cols-1 sm:grid-cols-3">
+      <SessionResults label="Qualifying" entries={results.qualifying} muted={muted} />
+      <SessionResults label="Sprint" entries={results.sprint} muted={muted} />
+      <SessionResults label="Race" entries={results.race} muted={muted} />
     </div>
   );
 }
@@ -78,7 +111,12 @@ export function RaceCard({
   isLive: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const { sources } = event;
+
+  const { qualifying, sprint, race } = event.results;
+  const hasResults = qualifying.length + sprint.length + race.length > 0;
+  const hasExtraSessions = qualifying.length > 0 || sprint.length > 0;
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
@@ -201,9 +239,28 @@ export function RaceCard({
           </div>
         </div>
 
-        {event.podium.length > 0 && (
-          <div className="pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <Podium entries={event.podium} muted={isPast} />
+        {hasResults && (
+          <div className="pt-2 flex flex-col gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            {/* Race result always; qualifying and sprint behind a toggle so the
+                calendar stays scannable on a phone. */}
+            <SessionResults label="Race" entries={event.results.race} muted={isPast} />
+            {expanded && (
+              <>
+                <SessionResults label="Qualifying" entries={event.results.qualifying} muted={isPast} />
+                <SessionResults label="Sprint" entries={event.results.sprint} muted={isPast} />
+              </>
+            )}
+            {hasExtraSessions && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+                aria-expanded={expanded}
+                className="self-start text-[10px] font-black uppercase tracking-widest py-1"
+                style={{ color: `rgba(${league.accent},0.75)` }}
+              >
+                {expanded ? "Hide sessions" : "Qualifying & sprint"}
+              </button>
+            )}
           </div>
         )}
 
@@ -215,17 +272,17 @@ export function RaceCard({
       </div>
 
       {/* ── DESKTOP layout ── */}
-      <div
-        className="hidden md:grid items-center gap-6 px-5 py-4"
-        style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
-      >
-        <div className="flex flex-col gap-0.5">
-          <div className="mb-0.5">{statusEl}</div>
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatYear(event.dateStart)}</span>
-        </div>
+      <div className="hidden md:flex flex-col px-5 py-4 gap-3">
+        <div
+          className="grid items-center gap-6"
+          style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
+        >
+          <div className="flex flex-col gap-0.5">
+            <div className="mb-0.5">{statusEl}</div>
+            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatYear(event.dateStart)}</span>
+          </div>
 
-        <div className="flex flex-col gap-2 min-w-0">
           <div className="flex items-center gap-3 min-w-0">
             <TeamFlag name={event.countryIso} className="w-10 h-7" />
             <div className="min-w-0">
@@ -235,14 +292,20 @@ export function RaceCard({
               </p>
             </div>
           </div>
-          {event.podium.length > 0 && <Podium entries={event.podium} muted={isPast} />}
+
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+            {showStreams && isHovered
+              ? sources.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)
+              : roundBadge}
+          </div>
         </div>
 
-        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-          {showStreams && isHovered
-            ? sources.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)
-            : roundBadge}
-        </div>
+        {/* Results span the full card width so three columns have room to breathe */}
+        {hasResults && (
+          <div className="pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <ResultsGrid results={event.results} muted={isPast} />
+          </div>
+        )}
       </div>
     </div>
   );
