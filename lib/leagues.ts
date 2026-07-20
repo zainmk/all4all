@@ -14,6 +14,8 @@ interface LeagueChrome {
   description: string;
   logo: string;
   logoAlt: string;
+  /** Logo already spells out the league name — don't repeat it as text beside it */
+  logoIsWordmark?: boolean;
   /** Accent as "r,g,b" so callers can build rgba() at any alpha */
   accent: string;
   /** Page background gradient */
@@ -102,10 +104,12 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     description: "MotoGP race calendar, results and live streams",
     logo: "/motogp-logo.svg",
     logoAlt: "MotoGP",
+    logoIsWordmark: true,
     sportekPath: "/motogp-stream/",
     desktopPriority: ["sportek", "admin", "delta"],
     mobilePriority: ["echo", "admin"],
-    accent: "225,6,19",
+    // Matches the #D90042 in the logo
+    accent: "217,0,66",
     background:
       "linear-gradient(160deg, #3a0510 0%, #1c070b 30%, #080506 60%, #0a0508 100%)",
     blobs: [

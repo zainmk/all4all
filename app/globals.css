@@ -18,6 +18,26 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
+/* League switcher: slide the row so the *active* chip sits dead centre, rather
+   than the group being centred as a whole. --shift is set per page (in chip
+   widths) by AppHeader. Only engages at lg and up: on narrower viewports the
+   row has nowhere to slide to without pushing an outer chip off-screen, so it
+   stays group-centred there. */
+.league-switcher {
+  --chip-pitch: 0px;
+  transform: translateX(calc(var(--shift, 0) * var(--chip-pitch)));
+  transition: transform 300ms ease-out;
+}
+
+@media (min-width: 1024px) {
+  /* w-44 (176px) + gap-2 (8px) */
+  .league-switcher { --chip-pitch: 184px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .league-switcher { transition: none; }
+}
+
 @keyframes pulse-ring {
   0% { transform: scale(0.8); opacity: 1; }
   100% { transform: scale(2); opacity: 0; }

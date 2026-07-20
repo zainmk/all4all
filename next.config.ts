@@ -1,13 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async redirects() {
-    return [
-      // Land on whichever league is in season. Point this at /fifa when the
-      // World Cup comes back around.
-      { source: "/", destination: "/wnba", permanent: false },
-    ];
-  },
+  // NOTE: "/" is deliberately not redirected here. The landing league now comes
+  // from localStorage, which only the browser can read — a config redirect runs
+  // at the edge and would pre-empt it. See app/page.tsx.
   async rewrites() {
     return [
       // Icons are per-route (app/icon.ico, app/wnba/icon.svg) so each league gets

@@ -3,6 +3,7 @@ import { LEAGUES, type LeagueId } from "@/lib/leagues";
 import { RefreshLive } from "@/components/RefreshLive";
 import { ScrollToNow } from "@/components/ScrollToNow";
 import { AppHeader } from "@/components/AppHeader";
+import { RememberLeague } from "@/components/RememberLeague";
 
 /**
  * Shared chrome for every league page: gradient, ambient blobs, header,
@@ -31,6 +32,7 @@ export function PageShell({
   return (
     <div className="min-h-screen" style={{ background: league.background }}>
       <RefreshLive />
+      <RememberLeague leagueId={leagueId} />
 
       {/* Ambient glow blobs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
