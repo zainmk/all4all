@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import type { ESPNMatch } from "@/types";
+import type { TeamLeagueConfig } from "@/lib/leagues";
 import { TeamFlag } from "@/components/TeamFlag";
+import { TeamDetail, hasDetail } from "@/components/TeamDetail";
 
-function TeamBadge({ logo, name, className = "w-10 h-7" }: { logo?: string; name?: string; className?: string }) {
+function TeamBadge({ logo, name, className = "w-10 h-7", fallback }: { logo?: string; name?: string; className?: string; fallback: "flag" | "initials" }) {
   const [failed, setFailed] = useState(false);
-  if (!logo || failed) return <TeamFlag name={name} className={className} />;
+  if (!logo || failed) return <TeamFlag name={name} className={className} fallback={fallback} />;
   return (
     <img
       src={logo}
@@ -28,17 +30,26 @@ function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
-  const upper = matchTime?.toUpperCase() ?? "FT";
-  const label = upper === "FT-PENS" || upper === "PENS" ? "PEN" : (matchTime ?? "FT");
-  const isOvertime = label !== "FT" && label !== "PEN";
+// ESPN's end-of-game label varies by sport: soccer gives "FT" / "AET" / "FT-PENS",
+// basketball gives "Final" / "Final/OT" / "Final/2OT".
+function endLabel(matchTime?: string): { label: string; isOvertime: boolean } {
+  const upper = (matchTime ?? "FT").toUpperCase().trim();
+  if (upper === "FT-PENS" || upper === "PENS") return { label: "PEN", isOvertime: false };
+  if (upper === "FINAL" || upper === "FT") return { label: "FT", isOvertime: false };
+  const ot = upper.match(/^FINAL\/(\d*OT)$/);
+  if (ot) return { label: ot[1], isOvertime: true };
+  return { label: matchTime ?? "FT", isOvertime: true };
+}
+
+function MatchTimeBadge({ matchTime, accent }: { matchTime?: string; accent: string }) {
+  const { label, isOvertime } = endLabel(matchTime);
   return (
     <span
       className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest shrink-0"
       style={{
-        background: isOvertime ? "rgba(251,191,36,0.08)" : "rgba(255,255,255,0.06)",
-        border: `1px solid ${isOvertime ? "rgba(251,191,36,0.25)" : "rgba(255,255,255,0.12)"}`,
-        color: isOvertime ? "rgba(251,191,36,0.70)" : "rgba(255,255,255,0.40)",
+        background: isOvertime ? `rgba(${accent},0.08)` : "rgba(255,255,255,0.06)",
+        border: `1px solid ${isOvertime ? `rgba(${accent},0.25)` : "rgba(255,255,255,0.12)"}`,
+        color: isOvertime ? `rgba(${accent},0.70)` : "rgba(255,255,255,0.40)",
       }}
     >
       {label}
@@ -46,7 +57,7 @@ function MatchTimeBadge({ matchTime }: { matchTime?: string }) {
   );
 }
 
-export function PastMatchCard({ match }: { match: ESPNMatch }) {
+export function PastMatchCard({ match, league }: { match: ESPNMatch; league: TeamLeagueConfig }) {
   const score = match.score ?? { home: 0, away: 0 };
 
   const scoreEl = (
@@ -87,33 +98,29 @@ export function PastMatchCard({ match }: { match: ESPNMatch }) {
             <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }}>{formatDate(match.date)}</span>
             <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{formatTime(match.date)}</span>
           </div>
-          <MatchTimeBadge matchTime={match.matchTime} />
+          <MatchTimeBadge matchTime={match.matchTime} accent={league.accent} />
         </div>
 
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
               <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: match.homeTeam.winner ? "rgba(255,255,255,0.95)" : match.awayTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-9 h-6" />
+              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-9 h-6" fallback={league.teamFallback} />
             </div>
             {scoreEl}
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-9 h-6" />
+              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-9 h-6" fallback={league.teamFallback} />
               <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: match.awayTeam.winner ? "rgba(255,255,255,0.95)" : match.homeTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
             </div>
           </div>
-          {match.goals.length > 0 && (
-            <div className="flex gap-2 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+          {hasDetail(league, match) && (
+            <div className="flex gap-2 text-[10px]">
               <div className="flex-1 flex flex-col items-end gap-px">
-                {match.goals.filter((g) => g.team === "home").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="home" goals={match.goals} primary="rgba(255,255,255,0.35)" secondary="rgba(255,255,255,0.20)" />
               </div>
               <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreEl}</div>
               <div className="flex-1 flex flex-col items-start gap-px">
-                {match.goals.filter((g) => g.team === "away").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="away" goals={match.goals} primary="rgba(255,255,255,0.35)" secondary="rgba(255,255,255,0.20)" />
               </div>
             </div>
           )}
@@ -149,32 +156,28 @@ export function PastMatchCard({ match }: { match: ESPNMatch }) {
           <div className="flex items-center justify-center gap-3">
             <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
               <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: match.homeTeam.winner ? "rgba(255,255,255,0.95)" : match.awayTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.homeTeam.name}</span>
-              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-7" />
+              <TeamBadge logo={match.homeTeam.logo} name={match.homeTeam.name} className="w-10 h-7" fallback={league.teamFallback} />
             </div>
             {scoreEl}
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-7" />
+              <TeamBadge logo={match.awayTeam.logo} name={match.awayTeam.name} className="w-10 h-7" fallback={league.teamFallback} />
               <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: match.awayTeam.winner ? "rgba(255,255,255,0.95)" : match.homeTeam.winner ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.70)", fontFamily: "var(--font-sport)" }}>{match.awayTeam.name}</span>
             </div>
           </div>
-          {match.goals.length > 0 && (
-            <div className="flex gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+          {hasDetail(league, match) && (
+            <div className="flex gap-3 text-[10px]">
               <div className="flex-1 flex flex-col items-end gap-px">
-                {match.goals.filter((g) => g.team === "home").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="home" goals={match.goals} primary="rgba(255,255,255,0.35)" secondary="rgba(255,255,255,0.20)" />
               </div>
               <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreEl}</div>
               <div className="flex-1 flex flex-col items-start gap-px">
-                {match.goals.filter((g) => g.team === "away").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.20)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="away" goals={match.goals} primary="rgba(255,255,255,0.35)" secondary="rgba(255,255,255,0.20)" />
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex justify-end"><MatchTimeBadge matchTime={match.matchTime} /></div>
+        <div className="flex justify-end"><MatchTimeBadge matchTime={match.matchTime} accent={league.accent} /></div>
       </div>
     </div>
   );

@@ -85,6 +85,9 @@ const FLAGS: Record<string, string> = {
 };
 
 export function flagUrl(teamName: string): string | undefined {
-  const code = FLAGS[teamName.toLowerCase().trim()];
+  const key = teamName.toLowerCase().trim();
+  // Race rounds identify their country by ISO code ("GB"), which is already the
+  // form flagcdn wants — no team name in these leagues is two letters long.
+  const code = FLAGS[key] ?? (/^[a-z]{2}$/.test(key) ? key : undefined);
   return code ? `https://flagcdn.com/w80/${code}.png` : undefined;
 }

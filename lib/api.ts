@@ -1,4 +1,4 @@
-import type { Match, MatchSource } from "@/types";
+import type { Match } from "@/types";
 
 const BASE = "https://streamed.pk/api";
 
@@ -30,10 +30,10 @@ export function embedUrl(source: string, id: string, streamNo = 1): string {
   return `https://embed.st/embed/${source}/${id}/${streamNo}`;
 }
 
-export function filterFootball(matches: Match[]): Match[] {
+export function filterByCategory(matches: Match[], category: string): Match[] {
   return matches.filter(
     (m) =>
-      m.category?.toLowerCase() === "football" &&
+      m.category?.toLowerCase() === category &&
       m.teams?.home?.name &&
       m.teams?.away?.name
   );

@@ -5,12 +5,15 @@ import { flagUrl } from "@/lib/flags";
 export function TeamFlag({
   name,
   className = "w-9 h-6",
+  fallback = "flag",
 }: {
   name?: string;
   className?: string;
+  /** Club leagues have no meaningful flag — go straight to initials. */
+  fallback?: "flag" | "initials";
 }) {
   if (!name) return null;
-  const url = flagUrl(name);
+  const url = fallback === "flag" ? flagUrl(name) : undefined;
   if (!url) {
     return (
       <div

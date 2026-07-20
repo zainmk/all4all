@@ -2,16 +2,27 @@
 
 import { useEffect, useState } from "react";
 import type { ESPNMatch, MatchSource } from "@/types";
+import type { TeamLeagueConfig } from "@/lib/leagues";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
+import { TeamDetail, hasDetail } from "@/components/TeamDetail";
 
 function displayName(name: string): string {
   return /winner|round of/i.test(name) ? "TBD" : name;
 }
 
-function TeamBadge({ logo, name, className = "w-10 h-10" }: { logo?: string; name?: string; className?: string }) {
+/**
+ * First source matching `name`. On desktop an "admin" pick skips url-bearing
+ * entries, which are manual overrides meant to be reached from their own badge.
+ */
+function pick(sources: MatchSource[], name: string, strictAdmin: boolean): MatchSource | undefined {
+  if (name === "admin" && strictAdmin) return sources.find((s) => s.source === "admin" && !s.url);
+  return sources.find((s) => s.source === name);
+}
+
+function TeamBadge({ logo, name, className = "w-10 h-10", fallback }: { logo?: string; name?: string; className?: string; fallback: "flag" | "initials" }) {
   const [failed, setFailed] = useState(false);
-  if (!logo || failed) return <TeamFlag name={name} className={className} />;
+  if (!logo || failed) return <TeamFlag name={name} className={className} fallback={fallback} />;
   return (
     <img
       src={logo}
@@ -47,9 +58,11 @@ function timeUntil(ms: number): string {
 export function MatchCard({
   match,
   isLive,
+  league,
 }: {
   match: ESPNMatch;
   isLive: boolean;
+  league: TeamLeagueConfig;
 }) {
   const { sources, date: kickoffMs } = match;
 
@@ -76,19 +89,15 @@ export function MatchCard({
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
     const isMobile = window.innerWidth < 768;
+    // Mobile can only play a subset of sources, so it has its own (shorter) order
+    // and deliberately no highest-viewer / first-source fallback.
+    const order = isMobile ? league.mobilePriority : league.desktopPriority;
     let target: MatchSource | null | undefined;
-    if (isMobile) {
-      // echo and admin work on mobile; prefer echo, fall back to admin
-      target = sources.find((s) => s.source === "echo") ?? sources.find((s) => s.source === "admin");
-    } else {
-      // Desktop: TSN → FOX → ITV1 → BBC → admin → sportek → highest-viewer → first
-      const tsnSrc = sources.find((s) => s.source === "tsn");
-      const foxSrc = sources.find((s) => s.source === "fox");
-      const britishSrc = sources.find((s) => s.source === "itv1") ?? sources.find((s) => s.source === "bbc");
-      const adminSrc = sources.find((s) => s.source === "admin" && !s.url);
-      const sportekSrc = sources.find((s) => s.source === "sportek");
-      target = tsnSrc ?? foxSrc ?? britishSrc ?? adminSrc ?? sportekSrc ?? bestSource ?? sources[0];
+    for (const name of order) {
+      target = pick(sources, name, !isMobile);
+      if (target) break;
     }
+    if (!target && !isMobile) target = bestSource ?? sources[0];
     if (!target) return;
     window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
   }
@@ -103,6 +112,10 @@ export function MatchCard({
         Live{match.clock ? <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 600 }}> · {match.clock}</span> : null}
       </span>
     </div>
+  ) : match.isPostponed ? (
+    <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.45)" }}>
+      Postponed
+    </span>
   ) : (
     <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>{timeUntil(kickoffMs)}</span>
   );
@@ -199,26 +212,22 @@ export function MatchCard({
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
               <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
-              <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-7 h-7" />
+              <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-7 h-7" fallback={league.teamFallback} />
             </div>
             <div className="shrink-0 w-14 flex items-center justify-center">{scoreOrVs}</div>
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-7 h-7" />
+              <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-7 h-7" fallback={league.teamFallback} />
               <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
             </div>
           </div>
-          {match.goals.length > 0 && (
-            <div className="flex gap-2 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+          {hasDetail(league, match) && (
+            <div className="flex gap-2 text-[10px]">
               <div className="flex-1 flex flex-col items-end gap-px">
-                {match.goals.filter((g) => g.team === "home").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="home" goals={match.goals} primary="rgba(255,255,255,0.45)" secondary="rgba(255,255,255,0.25)" />
               </div>
               <div className="shrink-0 w-14" />
               <div className="flex-1 flex flex-col items-start gap-px">
-                {match.goals.filter((g) => g.team === "away").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="away" goals={match.goals} primary="rgba(255,255,255,0.45)" secondary="rgba(255,255,255,0.25)" />
               </div>
             </div>
           )}
@@ -263,11 +272,11 @@ export function MatchCard({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
                 <span className="text-sm font-bold truncate text-right uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.homeTeam.name)}</span>
-                <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-10 h-10" />
+                <TeamBadge logo={match.homeTeam.logo} name={displayName(match.homeTeam.name)} className="w-10 h-10" fallback={league.teamFallback} />
               </div>
               <div className="shrink-0 flex items-center justify-center">{scoreOrVs}</div>
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-10 h-10" />
+                <TeamBadge logo={match.awayTeam.logo} name={displayName(match.awayTeam.name)} className="w-10 h-10" fallback={league.teamFallback} />
                 <span className="text-sm font-bold truncate uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}>{displayName(match.awayTeam.name)}</span>
               </div>
             </div>
@@ -283,24 +292,20 @@ export function MatchCard({
           )}
         </div>
 
-        {/* Goals row: card expands below, aligned under the center column */}
-        {match.goals.length > 0 && (
+        {/* Detail row: card expands below, aligned under the center column */}
+        {hasDetail(league, match) && (
           <div
             className="grid gap-6"
             style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
           >
             <div />
-            <div className="flex gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            <div className="flex gap-3 text-[10px]">
               <div className="flex-1 flex flex-col items-end gap-px">
-                {match.goals.filter((g) => g.team === "home").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="home" goals={match.goals} primary="rgba(255,255,255,0.45)" secondary="rgba(255,255,255,0.25)" />
               </div>
               <div className="shrink-0" style={{ visibility: "hidden" }}>{scoreOrVs}</div>
               <div className="flex-1 flex flex-col items-start gap-px">
-                {match.goals.filter((g) => g.team === "away").map((g, i) => (
-                  <span key={i}>{g.scorer} <span style={{ color: "rgba(255,255,255,0.25)" }}>{g.minute}</span></span>
-                ))}
+                <TeamDetail league={league} side="away" goals={match.goals} primary="rgba(255,255,255,0.45)" secondary="rgba(255,255,255,0.25)" />
               </div>
             </div>
             <div />

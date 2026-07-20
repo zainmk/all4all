@@ -11,8 +11,12 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "FIFA | 26",
-  description: "Watch live and upcoming football matches",
+  // Each league page sets its own title; this suffixes them ("WNBA · all4all")
+  title: {
+    template: "%s · all4all",
+    default: "all4all",
+  },
+  description: "Watch live and upcoming games",
 };
 
 export default function RootLayout({
@@ -20,7 +24,8 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable} ${barlowCondensed.variable} h-full`}>
-      <body className="min-h-full antialiased" style={{ background: "#090d1f" }}>
+      {/* Neutral near-black so overscroll doesn't clash with either league's gradient */}
+      <body className="min-h-full antialiased" style={{ background: "#07070c" }}>
         {children}
         <Analytics />
       </body>

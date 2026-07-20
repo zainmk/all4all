@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# all4all
 
-## Getting Started
+Live and upcoming games for a handful of leagues, on one page — scores from ESPN,
+streams aggregated from a few public sources, sorted chronologically around a
+"Now" marker.
 
-First, run the development server:
+## Leagues
+
+| Route     | League  | Shape                                        |
+| --------- | ------- | -------------------------------------------- |
+| `/wnba`   | WNBA    | Fixtures — two teams, a score                 |
+| `/motogp` | MotoGP  | Race calendar — one card per Grand Prix weekend, with podium |
+| `/fifa`   | FIFA 26 | Fixtures (off season)                         |
+
+`/` redirects to whichever league is in season. To change it, edit the redirect in
+[`next.config.ts`](next.config.ts).
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it's put together
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Everything league-specific lives in [`lib/leagues.ts`](lib/leagues.ts) — accent
+colour and page gradient, logo, stream click-through priority, and per-sport data
+settings. It's a discriminated union on `kind`:
 
-## Learn More
+- `kind: "team"` — ESPN-backed fixtures, rendered by
+  [`LeaguePage`](components/LeaguePage.tsx) with
+  [`MatchCard`](components/MatchCard.tsx) / [`PastMatchCard`](components/PastMatchCard.tsx).
+- `kind: "race"` — a season calendar, rendered by
+  [`RacePage`](components/RacePage.tsx) with [`RaceCard`](components/RaceCard.tsx).
 
-To learn more about Next.js, take a look at the following resources:
+Both share [`PageShell`](components/PageShell.tsx), which owns the gradient, ambient
+blobs, header, the past → NOW → upcoming layout, and the footer. Adding a league is
+a config entry plus a two-line `app/<league>/page.tsx`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Data sources
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **[ESPN](lib/espn.ts)** — scores, fixtures, team logos, venues. Public scoreboard
+  API, no auth.
+- **[totalsportek](lib/sportek.ts)** — scrapes today/tomorrow listings for stream
+  page URLs. Matches by team pair, falling back to nicknames and reversed
+  home/away ordering.
+- **[streamed.pk](lib/api.ts)** — `admin` and `echo` stream sources.
+- **[footybite](lib/footybite.ts)** — English-language broadcast feeds. Soccer only.
+- **[motogp.com](lib/motogp.ts)** — race calendar, circuits and podiums, via the
+  public `api.motogp.pulselive.com` endpoints. Podium lookup is three chained calls
+  (categories → sessions → classification) so it only runs for finished rounds, and
+  those results are cached for a day since they never change.
 
-## Deploy on Vercel
+Team names differ across all of them, so matching goes through a normalized
+`teamKey()` in [`lib/espn.ts`](lib/espn.ts), with per-source alias tables
+([`lib/team-aliases.ts`](lib/team-aliases.ts), and the `NAME_MAP` /
+`SLUG_OVERRIDES` constants in the scrapers). **When a stream doesn't show up for a
+game, a name mismatch is the first thing to check** — add an alias rather than
+special-casing.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+MotoGP has the same problem in a different form: sportek names rounds by demonym
+(`motogp-british-grand-prix`) while the API uses the country (`GRAND PRIX OF GREAT
+BRITAIN`), so rounds are matched through `SPORTEK_ROUND_ALIASES` in
+[`lib/motogp.ts`](lib/motogp.ts), keyed on the API's three-letter `short_name`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+One-off manual stream overrides go in
+[`lib/custom-streams.ts`](lib/custom-streams.ts), keyed by team pair.
+
+### Refreshing
+
+Pages are ISR with a 30s revalidate, and [`RefreshLive`](components/RefreshLive.tsx)
+calls `router.refresh()` on the same interval so scores tick over without a reload.
+
+Stream badges are deliberately hidden until 30 minutes before kick-off / tip-off,
+and disappear 30 minutes after a game ends.
