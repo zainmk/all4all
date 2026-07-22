@@ -1,4 +1,4 @@
-import type { ESPNMatch, GoalEvent } from "@/types";
+import type { ESPNMatch, GoalEvent, TeamStanding, TeamStandingsData } from "@/types";
 import type { TeamLeagueConfig } from "@/lib/leagues";
 import { resolveAlias } from "@/lib/team-aliases";
 
@@ -190,4 +190,76 @@ export async function getESPNMatchRange(
   }
 
   return results.sort((a, b) => a.date - b.date);
+}
+
+// ── Standings ────────────────────────────────────────────────────────────────
+
+interface ESPNStat { name?: string; displayValue?: string; value?: number }
+interface ESPNStandingEntry {
+  team: { displayName: string; abbreviation?: string; logos?: Array<{ href?: string }> };
+  stats: ESPNStat[];
+}
+interface ESPNStandingGroup {
+  name?: string;
+  standings?: { entries?: ESPNStandingEntry[] };
+}
+interface ESPNStandingsResponse {
+  season?: { year?: number };
+  children?: ESPNStandingGroup[];
+}
+
+function statValue(stats: ESPNStat[], name: string): string {
+  return stats.find((s) => s.name === name)?.displayValue ?? "";
+}
+function statNum(stats: ESPNStat[], name: string): number {
+  return stats.find((s) => s.name === name)?.value ?? 0;
+}
+
+/**
+ * Conference standings for a league, from ESPN's public standings API. Returns
+ * null when the league has no such table (e.g. a knockout tournament) or the
+ * request fails.
+ */
+export async function getStandings(
+  league: TeamLeagueConfig
+): Promise<TeamStandingsData | null> {
+  try {
+    const res = await fetch(
+      `https://site.web.api.espn.com/apis/v2/sports/${league.espnPath}/standings`,
+      { next: { revalidate: 300 } }
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as ESPNStandingsResponse;
+
+    const conferences = (data.children ?? [])
+      .map((group) => ({
+        name: group.name ?? "",
+        teams: (group.standings?.entries ?? [])
+          .map((e): TeamStanding => ({
+            seed: statNum(e.stats, "playoffSeed"),
+            team: e.team.displayName,
+            abbrev: e.team.abbreviation ?? "",
+            logo: e.team.logos?.[0]?.href,
+            wins: statNum(e.stats, "wins"),
+            losses: statNum(e.stats, "losses"),
+            winPct: statValue(e.stats, "winPercent"),
+            gamesBehind: statValue(e.stats, "gamesBehind"),
+            streak: statValue(e.stats, "streak"),
+            lastTen: statValue(e.stats, "Last Ten Games"),
+          }))
+          // Fall back to record order if seed isn't populated yet
+          .sort((a, b) => (a.seed || 99) - (b.seed || 99) || b.wins - a.wins),
+      }))
+      .filter((c) => c.teams.length > 0);
+
+    if (conferences.length === 0) return null;
+
+    // Western conference on the left
+    conferences.sort((a, b) => Number(/west/i.test(b.name)) - Number(/west/i.test(a.name)));
+
+    const year = data.season?.year ?? new Date().getFullYear();
+    return { title: `${year} Standings`, conferences };
+  } catch {
+    return null;
+  }
 }

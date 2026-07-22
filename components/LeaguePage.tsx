@@ -1,11 +1,12 @@
 import { getLiveMatches, getTodayMatches, filterByCategory } from "@/lib/api";
-import { getESPNMatchRange, teamKey } from "@/lib/espn";
+import { getESPNMatchRange, getStandings, teamKey } from "@/lib/espn";
 import { getCustomStreams } from "@/lib/custom-streams";
 import { getFootybiteStreams } from "@/lib/footybite";
 import { getSportekIndex } from "@/lib/sportek";
 import { LEAGUES, type LeagueId, type TeamLeagueConfig } from "@/lib/leagues";
 import { MatchCard } from "@/components/MatchCard";
 import { PastMatchCard } from "@/components/PastMatchCard";
+import { TeamStandingsCard } from "@/components/TeamStandingsCard";
 import { PageShell } from "@/components/PageShell";
 import type { ESPNMatch, MatchSource } from "@/types";
 
@@ -14,11 +15,12 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
   const now = Date.now();
 
   // Phase 1: core data in parallel
-  const [espnMatches, liveAll, todayAll, sportek] = await Promise.all([
+  const [espnMatches, liveAll, todayAll, sportek, standings] = await Promise.all([
     getESPNMatchRange(league, 3, 3),
     getLiveMatches(),
     getTodayMatches(),
     getSportekIndex(),
+    league.hasStandings ? getStandings(league) : Promise.resolve(null),
   ]);
 
   const streamsDown = liveAll === null && todayAll === null;
@@ -97,6 +99,9 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
           />
         </div>
       ))}
+      beforeNow={
+        standings ? <TeamStandingsCard data={standings} league={league} /> : null
+      }
       emptyMessage="No matches found."
       nothingUpcomingMessage={
         streamsDown

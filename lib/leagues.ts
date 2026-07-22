@@ -1,7 +1,7 @@
 // Per-league configuration. Everything that differs between the league pages
 // lives here so the page chrome and cards stay shared.
 
-export type LeagueId = "fifa" | "wnba" | "motogp";
+export type LeagueId = "fifa" | "wnba" | "motogp" | "f1";
 
 /** Presentation + stream-picking bits every league page needs. */
 interface LeagueChrome {
@@ -53,6 +53,8 @@ export interface TeamLeagueConfig extends LeagueChrome {
   typicalDurationMins: number;
   /** "kick-off" / "tip-off" — used in empty-state copy */
   startNoun: string;
+  /** Show an ESPN conference-standings card above the NOW divider */
+  hasStandings?: boolean;
 }
 
 /** Race series: a calendar of multi-day events with a podium, no fixtures. */
@@ -60,6 +62,10 @@ export interface RaceLeagueConfig extends LeagueChrome {
   kind: "race";
   /** sportek category page listing this series' stream pages */
   sportekPath: string;
+  /** Standings heading, minus the year — "MotoGP Riders’ Championship" */
+  championshipTitle: string;
+  /** Plural competitor noun for the standings expand button — "riders" / "drivers" */
+  competitorPlural: string;
 }
 
 export type LeagueConfig = TeamLeagueConfig | RaceLeagueConfig;
@@ -93,7 +99,35 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#f97316", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.09, stop: "70%" },
     ],
     startNoun: "tip-off",
+    hasStandings: true,
     footer: "Streams by totalsportek & streamed.pk · Scores by ESPN",
+  },
+  f1: {
+    kind: "race",
+    id: "f1",
+    href: "/f1",
+    label: "F1",
+    title: "Formula 1",
+    description: "Formula 1 race calendar, results and live streams",
+    logo: "/f1-logo.svg",
+    logoAlt: "Formula 1",
+    logoIsWordmark: true,
+    sportekPath: "/f1-stream/",
+    championshipTitle: "Formula 1 Drivers’ Championship",
+    competitorPlural: "drivers",
+    desktopPriority: ["sportek", "admin", "delta"],
+    mobilePriority: ["echo", "admin"],
+    // The red from the logo (#DE1101)
+    accent: "222,17,1",
+    background:
+      "linear-gradient(160deg, #360604 0%, #1c0606 32%, #0b0403 62%, #090405 100%)",
+    blobs: [
+      { color: "#de1101", className: "absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px]", opacity: 0.3, stop: "65%" },
+      { color: "#7f1d1d", className: "absolute -top-10 -left-32 w-[700px] h-[700px]", opacity: 0.26, stop: "65%" },
+      { color: "#450a0a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.32, stop: "65%" },
+      { color: "#dc2626", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
+    ],
+    footer: "Streams by totalsportek · Results by jolpica (Ergast)",
   },
   motogp: {
     kind: "race",
@@ -106,17 +140,19 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logoAlt: "MotoGP",
     logoIsWordmark: true,
     sportekPath: "/motogp-stream/",
+    championshipTitle: "MotoGP Riders’ Championship",
+    competitorPlural: "riders",
     desktopPriority: ["sportek", "admin", "delta"],
     mobilePriority: ["echo", "admin"],
-    // Matches the #D90042 in the logo
-    accent: "217,0,66",
+    // Monochrome graphite to match the black/silver wordmark, not the old crimson
+    accent: "161,161,170",
     background:
-      "linear-gradient(160deg, #3a0510 0%, #1c070b 30%, #080506 60%, #0a0508 100%)",
+      "linear-gradient(160deg, #26262b 0%, #17171a 32%, #0b0b0d 62%, #0a0a0c 100%)",
     blobs: [
-      { color: "#be123c", className: "absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px]", opacity: 0.32, stop: "65%" },
-      { color: "#7f1d1d", className: "absolute -top-10 -left-32 w-[700px] h-[700px]", opacity: 0.28, stop: "65%" },
-      { color: "#1e293b", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.3, stop: "65%" },
-      { color: "#dc2626", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.09, stop: "70%" },
+      { color: "#52525b", className: "absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px]", opacity: 0.3, stop: "65%" },
+      { color: "#3f3f46", className: "absolute -top-10 -left-32 w-[700px] h-[700px]", opacity: 0.32, stop: "65%" },
+      { color: "#27272a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.35, stop: "65%" },
+      { color: "#71717a", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
     footer: "Streams by totalsportek · Results by motogp.com",
   },
@@ -152,4 +188,4 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
 };
 
 // Header switcher order
-export const LEAGUE_ORDER: LeagueId[] = ["wnba", "motogp", "fifa"];
+export const LEAGUE_ORDER: LeagueId[] = ["wnba", "motogp", "f1", "fifa"];

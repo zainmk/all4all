@@ -96,14 +96,14 @@ async function fetchMatchUrls(path: string): Promise<Index> {
 }
 
 /**
- * Stream page URLs from a race-series category page (e.g. "/motogp-stream/"),
- * keyed by the round's API short_name ("GBR"). Those pages list the calendar
- * with slugs like "motogp-british-grand-prix-vs-live" and no dates, so the
- * round is identified by the alias table rather than by when it runs.
+ * Raw stream-page URLs from a race-series category page (e.g. "/f1-stream/"),
+ * keyed by the round slug with the series prefix and "-vs-live" stripped
+ * ("f1-hungarian-grand-prix-vs-live" → "hungarian-grand-prix"). Those pages
+ * list the whole calendar without dates, so the caller matches slugs to rounds.
  */
-export async function getSportekRaceIndex(
+export async function getSportekRaceSlugs(
   path: string,
-  aliases: Record<string, string>
+  prefix: string
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   try {
@@ -114,12 +114,28 @@ export async function getSportekRaceIndex(
     let m;
     while ((m = re.exec(html)) !== null) {
       const url = m[1];
-      // "motogp-british-grand-prix-vs-live" → "british"
-      const slug = m[2].replace(/^motogp-/, "").replace(/-vs-live$/, "");
-      const round = aliases[slug] ?? aliases[slug.replace(/-grand-prix$/, "")];
-      if (round && !result.has(round)) result.set(round, url);
+      const slug = m[2].replace(new RegExp(`^${prefix}-`), "").replace(/-vs-live$/, "");
+      if (slug && !result.has(slug)) result.set(slug, url);
     }
   } catch { /* scraping failure is non-fatal */ }
+  return result;
+}
+
+/**
+ * MotoGP variant: resolves each slug to the API's short_name ("GBR") via an
+ * alias table, since sportek's demonym ("british") doesn't match the API's
+ * country ("GRAND PRIX OF GREAT BRITAIN").
+ */
+export async function getSportekRaceIndex(
+  path: string,
+  aliases: Record<string, string>
+): Promise<Map<string, string>> {
+  const slugs = await getSportekRaceSlugs(path, "motogp");
+  const result = new Map<string, string>();
+  for (const [slug, url] of slugs) {
+    const round = aliases[slug] ?? aliases[slug.replace(/-grand-prix$/, "")];
+    if (round && !result.has(round)) result.set(round, url);
+  }
   return result;
 }
 

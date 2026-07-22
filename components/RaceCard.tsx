@@ -24,6 +24,14 @@ function formatYear(ms: number): string {
   return String(new Date(ms).getFullYear());
 }
 
+/** Race-session start as "Sun 9:00 AM" in the viewer's local time. */
+function formatRaceStart(ms: number): string {
+  const d = new Date(ms);
+  const day = d.toLocaleDateString("en-US", { weekday: "short" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${day} ${time}`;
+}
+
 function daysUntil(ms: number): string {
   const diff = ms - Date.now();
   if (diff <= 0) return "Under way";
@@ -221,11 +229,18 @@ export function RaceCard({
     >
       {/* ── MOBILE layout ── */}
       <div className="md:hidden flex flex-col gap-2.5 px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           {statusEl}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
-            {roundBadge}
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
+              {roundBadge}
+            </div>
+            {event.raceStart !== undefined && (
+              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.40)" }}>
+                Race · {formatRaceStart(event.raceStart)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -280,7 +295,12 @@ export function RaceCard({
           <div className="flex flex-col gap-0.5">
             <div className="mb-0.5">{statusEl}</div>
             <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatYear(event.dateStart)}</span>
+            {event.raceStart !== undefined && (
+              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+                Race · {formatRaceStart(event.raceStart)}
+              </span>
+            )}
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatYear(event.dateStart)}</span>
           </div>
 
           <div className="flex items-center gap-3 min-w-0">

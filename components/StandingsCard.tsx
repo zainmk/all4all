@@ -54,7 +54,7 @@ function PositionChange({ change }: { change: number }) {
 
 /** Finishes at the last few rounds — the quickest read on current form. */
 function RecentForm({ recent }: { recent: StandingEntry["recent"] }) {
-  if (recent.length === 0) return null;
+  if (!recent || recent.length === 0) return null;
   return (
     <div className="hidden lg:flex items-center gap-1 shrink-0">
       {recent.map(({ round, position }) => (
@@ -112,7 +112,7 @@ export function StandingsCard({
             <Trophy color={`rgba(${league.accent},0.9)`} />
             {/* One expression — JSX drops the literal space between {year} and
                 the text that follows it, rendering "2026Riders'". */}
-            {`${year} MotoGP Riders’ Championship`}
+            {`${year} ${league.championshipTitle}`}
           </h2>
           <span className="text-[11px] font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.45)" }}>
             {seasonOver
@@ -154,9 +154,13 @@ export function StandingsCard({
               <span
                 className="hidden xl:inline tabular-nums shrink-0"
                 style={{ color: "rgba(255,255,255,0.30)" }}
-                title={`${s.raceWins} race wins · ${s.podiums} podiums · ${s.sprintWins} sprint wins`}
+                title={
+                  s.podiums !== undefined
+                    ? `${s.raceWins} race wins · ${s.podiums} podiums`
+                    : `${s.raceWins} race wins`
+                }
               >
-                {s.raceWins}W · {s.podiums}P
+                {s.raceWins}W{s.podiums !== undefined ? ` · ${s.podiums}P` : ""}
               </span>
               <RecentForm recent={s.recent} />
               <span
@@ -179,7 +183,7 @@ export function StandingsCard({
               className="text-[10px] font-black uppercase tracking-widest py-1"
               style={{ color: `rgba(${league.accent},0.75)` }}
             >
-              {expanded ? "Show top 5" : `All ${standings.length} riders`}
+              {expanded ? "Show top 5" : `All ${standings.length} ${league.competitorPlural}`}
             </button>
           )}
           {nextRound && (

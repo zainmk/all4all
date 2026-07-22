@@ -10,6 +10,7 @@ streams aggregated from a few public sources, sorted chronologically around a
 | --------- | ------- | -------------------------------------------- |
 | `/wnba`   | WNBA    | Fixtures — two teams, a score                 |
 | `/motogp` | MotoGP  | Race calendar — one card per Grand Prix weekend, with podium |
+| `/f1`     | F1      | Race calendar — same shape as MotoGP          |
 | `/fifa`   | FIFA 26 | Fixtures (off season)                         |
 
 `/` redirects to whichever league is in season. To change it, edit the redirect in
@@ -53,6 +54,15 @@ a config entry plus a two-line `app/<league>/page.tsx`.
   public `api.motogp.pulselive.com` endpoints. Podium lookup is three chained calls
   (categories → sessions → classification) so it only runs for finished rounds, and
   those results are cached for a day since they never change.
+- **[jolpica / Ergast](lib/f1.ts)** — F1 calendar, results and standings. Session
+  results (qualifying/sprint/race) are one call each per finished round; jolpica
+  rate-limits bursts, so `getF1Season` paces them with `mapLimit` and skips the
+  sprint call on non-sprint weekends. Standings movement (▲▼) is computed by diffing
+  the two most recent rounds, since the API doesn't report it.
+
+Both race series render through the shared [`RacePage`](components/RacePage.tsx) /
+[`RaceCard`](components/RaceCard.tsx) / [`StandingsCard`](components/StandingsCard.tsx);
+[`lib/race-data.ts`](lib/race-data.ts) dispatches to the right provider by league id.
 
 Team names differ across all of them, so matching goes through a normalized
 `teamKey()` in [`lib/espn.ts`](lib/espn.ts), with per-source alias tables

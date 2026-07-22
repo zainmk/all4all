@@ -40,6 +40,8 @@ export interface RaceEvent {
   place: string;
   dateStart: number;
   dateEnd: number;
+  /** Exact start of the main race session (with time of day), when known */
+  raceStart?: number;
   isFinished: boolean;
   round: number;
   results: RaceResults;
@@ -50,16 +52,18 @@ export interface StandingEntry {
   position: number;
   /** Places gained (+) or lost (−) at the last round */
   positionChange: number;
+  /** Rider (MotoGP) or driver (F1) name */
   rider: string;
   riderNumber: number;
   countryIso: string;
   team: string;
   points: number;
   raceWins: number;
-  podiums: number;
-  sprintWins: number;
+  /** Not every series' API aggregates these; omit when unavailable */
+  podiums?: number;
+  sprintWins?: number;
   /** Finish at each of the most recent rounds; null = did not finish/start */
-  recent: Array<{ round: string; position: number | null }>;
+  recent?: Array<{ round: string; position: number | null }>;
 }
 
 /** Everything needed to read the state of the championship at a glance. */
@@ -71,6 +75,34 @@ export interface ChampionshipStatus {
   /** Maximum points still winnable — 25 (race) + 12 (sprint) per round left */
   pointsRemaining: number;
   standings: StandingEntry[];
+}
+
+export interface TeamStanding {
+  seed: number;
+  team: string;
+  abbrev: string;
+  logo?: string;
+  wins: number;
+  losses: number;
+  /** e.g. ".615" */
+  winPct: string;
+  /** "-" for the leader, else "2.5" */
+  gamesBehind: string;
+  /** "W3" / "L1" */
+  streak: string;
+  /** last ten games, e.g. "7-3" */
+  lastTen: string;
+}
+
+export interface ConferenceStandings {
+  name: string;
+  teams: TeamStanding[];
+}
+
+/** A league table grouped by conference/division. */
+export interface TeamStandingsData {
+  title: string;
+  conferences: ConferenceStandings[];
 }
 
 export interface GoalEvent {

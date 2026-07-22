@@ -31,7 +31,7 @@ interface APIEvent {
 }
 
 interface APICategory { id: string; name: string }
-interface APISession { id: string; type?: string; number?: number | null }
+interface APISession { id: string; type?: string; number?: number | null; date?: string }
 
 interface APIClassification {
   position?: number;
@@ -96,40 +96,46 @@ function formatGap(gap?: string): string {
   return gap.startsWith("+") ? gap : `+${gap}`;
 }
 
+interface RoundData { results: RaceResults; raceStart?: number }
+
 /**
- * Qualifying, sprint and race podiums for an event's premier class. Five calls
- * (categories → sessions → three classifications), so it only runs for events
- * that have actually finished — and those results never change, so they're
- * cached for a day.
+ * A round's session list gives both the race-session start time (for every
+ * round) and, for finished rounds, the podiums via three classification calls.
+ * The premier category id is constant across a season, so it's passed in rather
+ * than re-fetched per round.
  */
-async function getResults(eventId: string): Promise<RaceResults> {
-  const cats = await getJSON<APICategory[]>(
-    `${BASE}/categories?eventUuid=${eventId}`,
-    FINISHED_TTL
-  );
-  // "MotoGP™" — match loosely so the trademark glyph can't break it
-  const premier = cats?.find((c) => /^motogp/i.test(c.name));
-  if (!premier) return NO_RESULTS;
+async function getRoundData(
+  eventId: string,
+  premierId: string | undefined,
+  finished: boolean
+): Promise<RoundData> {
+  if (!premierId) return { results: NO_RESULTS };
 
   const sessions = await getJSON<APISession[]>(
-    `${BASE}/sessions?eventUuid=${eventId}&categoryUuid=${premier.id}`,
-    FINISHED_TTL
+    `${BASE}/sessions?eventUuid=${eventId}&categoryUuid=${premierId}`,
+    finished ? FINISHED_TTL : SCHEDULE_TTL
   );
-  if (!sessions) return NO_RESULTS;
+  if (!sessions) return { results: NO_RESULTS };
 
   // Sessions are keyed by type *and* number — qualifying is {type:"Q",number:2},
   // not {type:"Q2"}, while SPR/RAC have a null number.
   const of = (key: string) =>
     sessions.find((s) => `${s.type ?? ""}${s.number ?? ""}` === key);
 
+  const rac = of("RAC");
+  const raceStart = rac?.date ? Date.parse(rac.date) : undefined;
+
+  // Upcoming rounds: we have the time but no results to fetch yet
+  if (!finished) return { results: NO_RESULTS, raceStart };
+
   const [qualifying, sprint, race] = await Promise.all([
     // Q2 decides the front of the grid; Q1 riders start from P13 back
     topThree(of("Q2")),
     topThree(of("SPR")),
-    topThree(of("RAC")),
+    topThree(rac),
   ]);
 
-  return { qualifying, sprint, race };
+  return { results: { qualifying, sprint, race }, raceStart };
 }
 
 function isFinished(event: APIEvent): boolean {
@@ -154,9 +160,17 @@ export async function getMotoGPSeason(): Promise<Omit<RaceEvent, "sources">[]> {
     .filter((e) => !e.test && e.date_start)
     .sort((a, b) => Date.parse(a.date_start!) - Date.parse(b.date_start!));
 
-  // Only finished rounds need the results lookup
-  const results = await Promise.all(
-    rounds.map((e) => (isFinished(e) ? getResults(e.id) : Promise.resolve(NO_RESULTS)))
+  // The premier category id is constant across the season, so fetch it once and
+  // reuse for every round's sessions lookup.
+  const cats = await getJSON<APICategory[]>(
+    `${BASE}/categories?seasonUuid=${season.id}`,
+    SCHEDULE_TTL
+  );
+  const premierId = cats?.find((c) => /^motogp/i.test(c.name))?.id;
+
+  // Every round's sessions give the race start time; finished rounds also get podiums.
+  const data = await Promise.all(
+    rounds.map((e) => getRoundData(e.id, premierId, isFinished(e)))
   );
 
   return rounds.map((e, i) => ({
@@ -168,9 +182,10 @@ export async function getMotoGPSeason(): Promise<Omit<RaceEvent, "sources">[]> {
     place: e.circuit?.place ?? "",
     dateStart: Date.parse(e.date_start!),
     dateEnd: e.date_end ? Date.parse(e.date_end) : Date.parse(e.date_start!),
+    raceStart: data[i].raceStart,
     isFinished: isFinished(e),
     round: i + 1,
-    results: results[i],
+    results: data[i].results,
   }));
 }
 

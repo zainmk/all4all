@@ -20,17 +20,17 @@ body {
 
 /* League switcher: slide the row so the *active* chip sits dead centre, rather
    than the group being centred as a whole. --shift is set per page (in chip
-   widths) by AppHeader. Only engages at lg and up: on narrower viewports the
-   row has nowhere to slide to without pushing an outer chip off-screen, so it
-   stays group-centred there. */
+   widths) by AppHeader. Engages only at ≥1280px: below that the four-chip row
+   can't slide far enough to centre an end chip without pushing the opposite
+   chip past the viewport edge, so it stays group-centred there. */
 .league-switcher {
   --chip-pitch: 0px;
   transform: translateX(calc(var(--shift, 0) * var(--chip-pitch)));
   transition: transform 300ms ease-out;
 }
 
-@media (min-width: 1024px) {
-  /* w-44 (176px) + gap-2 (8px) */
+@media (min-width: 1280px) {
+  /* md:w-44 (176px) + row gap-2 (8px) */
   .league-switcher { --chip-pitch: 184px; }
 }
 
