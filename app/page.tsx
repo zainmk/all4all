@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { LEAGUES } from "@/lib/leagues";
 import { readStoredLeague } from "@/lib/league-storage";
 
-/** League to open for a first-time visitor — whichever is in season. */
-const DEFAULT_LEAGUE = "wnba" as const;
+/** League to open for a first-time visitor (no stored preference yet). */
+const DEFAULT_LEAGUE = "f1" as const;
 
 /**
  * "/" is a client-side hop to the league the user last viewed. It has to run in
