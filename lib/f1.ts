@@ -24,22 +24,22 @@ async function getJSON<T>(url: string, revalidate: number): Promise<T | null> {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Run `fn` over `items` at most `limit` at a time. jolpica rate-limits bursts
- * (~4 req/s), and a full season's results is dozens of calls, so firing them
- * all at once gets many 429s. Results are cached hard, so this only paces the
+ * Fetch URLs one at a time with a gap between them. jolpica rate-limits bursts
+ * (~4 req/s) and its budget is shared/stateful, so even a handful of concurrent
+ * requests intermittently 429 — and Next caches those failures for the whole
+ * revalidate window, leaving results blank. Serialising with a gap keeps us
+ * safely under the limit; the results are cached hard, so this only paces the
  * cold render.
  */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
+async function fetchSequential<T>(urls: string[], revalidate: number, gapMs = 300): Promise<(T | null)[]> {
+  const out: (T | null)[] = [];
+  for (let i = 0; i < urls.length; i++) {
+    if (i > 0) await sleep(gapMs);
+    out.push(await getJSON<T>(urls[i], revalidate));
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
 }
 
@@ -109,51 +109,78 @@ function formatGap(time?: string): string {
   return time.startsWith("+") ? time : `+${time}`;
 }
 
-/** Top three of one session's result rows. */
-function topThree(rows: ErgastResult[] | undefined, kind: "race" | "quali"): PodiumEntry[] {
-  return (rows ?? [])
-    .slice(0, 3)
-    .map((r, i) => ({
-      position: parseInt(r.position ?? "", 10) || i + 1,
-      rider: fullName(r.Driver),
-      team: r.Constructor?.name ?? r.Constructors?.[0]?.name ?? "",
-      // Race: winner's total time, others' gap. Quali: the pole/relative lap.
-      time:
-        kind === "quali"
-          ? r.Q3 ?? r.Time?.time ?? ""
-          : i === 0
-            ? r.Time?.time ?? r.status ?? ""
-            : formatGap(r.Time?.time),
-      points: r.points !== undefined ? Number(r.points) : undefined,
-    }))
-    .filter((p) => p.rider);
-}
-
 const NO_RESULTS: RaceResults = { qualifying: [], sprint: [], race: [] };
 
-/** Qualifying, (optional) sprint and race podiums for one finished round. */
-async function getResults(season: string, round: string, hasSprint: boolean): Promise<RaceResults> {
-  const one = (path: string) =>
-    getJSON<{ MRData: { RaceTable: { Races: ErgastRace[] } } }>(
-      `${BASE}/${season}/${round}/${path}.json`,
-      FINISHED_TTL
-    );
+type SessionKind = "race" | "quali";
 
-  const [raceJ, qualiJ, sprintJ] = await Promise.all([
-    one("results"),
-    one("qualifying"),
-    hasSprint ? one("sprint") : Promise.resolve(null),
-  ]);
-
-  const race = raceJ?.MRData.RaceTable.Races[0]?.Results;
-  const quali = qualiJ?.MRData.RaceTable.Races[0]?.QualifyingResults;
-  const sprint = sprintJ?.MRData.RaceTable.Races[0]?.SprintResults;
-
+function toPodium(row: ErgastResult, position: number, kind: SessionKind): PodiumEntry {
   return {
-    qualifying: topThree(quali, "quali"),
-    sprint: topThree(sprint, "race"),
-    race: topThree(race, "race"),
+    position,
+    rider: fullName(row.Driver),
+    team: row.Constructor?.name ?? row.Constructors?.[0]?.name ?? "",
+    // Race: winner's total time, others' gap to first. Quali: the pole/relative lap.
+    time:
+      kind === "quali"
+        ? row.Q3 ?? row.Time?.time ?? ""
+        : position === 1
+          ? row.Time?.time ?? row.status ?? ""
+          : formatGap(row.Time?.time),
+    points: row.points !== undefined ? Number(row.points) : undefined,
   };
+}
+
+/**
+ * Ergast can filter a session by finishing position across the whole season, so
+ * three calls per session (positions 1–3) return every round's podium — nine
+ * calls total, regardless of round count, versus three per finished round. That
+ * keeps us well under the rate limit. Returns round → top-three entries.
+ */
+function assemblePodiums(
+  responses: Array<{ MRData: { RaceTable: { Races: ErgastRace[] } } } | null>,
+  kind: SessionKind
+): Map<string, PodiumEntry[]> {
+  const byRound = new Map<string, PodiumEntry[]>();
+  // responses[0] = P1, [1] = P2, [2] = P3
+  responses.forEach((json, idx) => {
+    const position = idx + 1;
+    for (const race of json?.MRData.RaceTable.Races ?? []) {
+      const row = (race.Results ?? race.QualifyingResults ?? race.SprintResults ?? [])[0];
+      if (!row || !row.Driver) continue;
+      const entry = toPodium(row, position, kind);
+      const arr = byRound.get(race.round) ?? [];
+      arr.push(entry);
+      byRound.set(race.round, arr);
+    }
+  });
+  for (const arr of byRound.values()) arr.sort((a, b) => a.position - b.position);
+  return byRound;
+}
+
+async function getSeasonPodiums(season: string): Promise<Map<string, RaceResults>> {
+  // Nine URLs: {race,qualifying,sprint} × positions 1–3, each returning all rounds
+  const urls: string[] = [];
+  for (const type of ["results", "qualifying", "sprint"]) {
+    for (const pos of [1, 2, 3]) {
+      urls.push(`${BASE}/${season}/${type}/${pos}.json?limit=100`);
+    }
+  }
+  type RaceJson = { MRData: { RaceTable: { Races: ErgastRace[] } } };
+  const r = await fetchSequential<RaceJson>(urls, FINISHED_TTL);
+
+  const race = assemblePodiums(r.slice(0, 3), "race");
+  const qualifying = assemblePodiums(r.slice(3, 6), "quali");
+  const sprint = assemblePodiums(r.slice(6, 9), "race");
+
+  const rounds = new Set<string>([...race.keys(), ...qualifying.keys(), ...sprint.keys()]);
+  const map = new Map<string, RaceResults>();
+  for (const round of rounds) {
+    map.set(round, {
+      race: race.get(round) ?? [],
+      qualifying: qualifying.get(round) ?? [],
+      sprint: sprint.get(round) ?? [],
+    });
+  }
+  return map;
 }
 
 /** The full season calendar, oldest first, with podiums on finished rounds. */
@@ -176,16 +203,13 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
     return { r, raceMs, startMs, finished: now > raceMs + 4 * 3_600_000 };
   });
 
-  // Paced to stay under jolpica's burst limit — each finished round is up to
-  // three calls, so 3 rounds at a time is ~9 in flight.
-  const results = await mapLimit(withTimes, 3, ({ r, finished }) =>
-    finished ? getResults(season, r.round, !!r.Sprint) : Promise.resolve(NO_RESULTS)
-  );
+  // One season-wide fetch (9 calls) covers every round's podiums
+  const podiums = await getSeasonPodiums(season);
 
   return withTimes.map(({ r, raceMs, startMs, finished }, i) => {
     const loc = r.Circuit?.Location;
     return {
-      id: `f1-2026-${r.round}`,
+      id: `f1-${season}-${r.round}`,
       name: r.raceName,
       // Slug used both as the DOM id and to match sportek stream links
       shortName: sportekSlug(r.raceName),
@@ -198,7 +222,7 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
       raceStart: raceMs,
       isFinished: finished,
       round: parseInt(r.round, 10) || i + 1,
-      results: results[i],
+      results: podiums.get(r.round) ?? NO_RESULTS,
     };
   });
 }
