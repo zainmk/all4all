@@ -62,6 +62,7 @@ interface ErgastRace {
   time?: string;
   Circuit?: ErgastCircuit;
   FirstPractice?: ErgastSession;
+  Qualifying?: ErgastSession;
   Sprint?: ErgastSession;
   Results?: ErgastResult[];
   QualifyingResults?: ErgastResult[];
@@ -109,8 +110,6 @@ function formatGap(time?: string): string {
   return time.startsWith("+") ? time : `+${time}`;
 }
 
-const NO_RESULTS: RaceResults = { qualifying: [], sprint: [], race: [] };
-
 type SessionKind = "race" | "quali";
 
 function toPodium(row: ErgastResult, position: number, kind: SessionKind): PodiumEntry {
@@ -156,7 +155,13 @@ function assemblePodiums(
   return byRound;
 }
 
-async function getSeasonPodiums(season: string): Promise<Map<string, RaceResults>> {
+interface RoundPodiums {
+  qualifying: PodiumEntry[];
+  sprint: PodiumEntry[];
+  race: PodiumEntry[];
+}
+
+async function getSeasonPodiums(season: string): Promise<Map<string, RoundPodiums>> {
   // Nine URLs: {race,qualifying,sprint} × positions 1–3, each returning all rounds
   const urls: string[] = [];
   for (const type of ["results", "qualifying", "sprint"]) {
@@ -172,7 +177,7 @@ async function getSeasonPodiums(season: string): Promise<Map<string, RaceResults
   const sprint = assemblePodiums(r.slice(6, 9), "race");
 
   const rounds = new Set<string>([...race.keys(), ...qualifying.keys(), ...sprint.keys()]);
-  const map = new Map<string, RaceResults>();
+  const map = new Map<string, RoundPodiums>();
   for (const round of rounds) {
     map.set(round, {
       race: race.get(round) ?? [],
@@ -181,6 +186,11 @@ async function getSeasonPodiums(season: string): Promise<Map<string, RaceResults
     });
   }
   return map;
+}
+
+/** Parse a jolpica session's date+time into ms, if present. */
+function sessionStart(s?: ErgastSession): number | undefined {
+  return s?.date ? Date.parse(`${s.date}T${s.time ?? "12:00:00Z"}`) : undefined;
 }
 
 /** The full season calendar, oldest first, with podiums on finished rounds. */
@@ -208,6 +218,15 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
 
   return withTimes.map(({ r, raceMs, startMs, finished }, i) => {
     const loc = r.Circuit?.Location;
+    const pod = podiums.get(r.round);
+    // Each session carries its scheduled time (from the calendar) plus its
+    // podium once run. Sprint has no `start` on non-sprint weekends, so the card
+    // simply omits it.
+    const results: RaceResults = {
+      qualifying: { start: sessionStart(r.Qualifying), podium: pod?.qualifying ?? [] },
+      sprint: { start: sessionStart(r.Sprint), podium: pod?.sprint ?? [] },
+      race: { start: raceMs, podium: pod?.race ?? [] },
+    };
     return {
       id: `f1-${season}-${r.round}`,
       name: r.raceName,
@@ -222,7 +241,7 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
       raceStart: raceMs,
       isFinished: finished,
       round: parseInt(r.round, 10) || i + 1,
-      results: podiums.get(r.round) ?? NO_RESULTS,
+      results,
     };
   });
 }

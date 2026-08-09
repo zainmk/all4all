@@ -22,11 +22,18 @@ export interface PodiumEntry {
   points?: number;
 }
 
-/** Top three from each of the sessions worth showing for a finished round. */
+export interface SessionInfo {
+  /** Scheduled start datetime, when known (drives the "when's the next session" line) */
+  start?: number;
+  /** Top three, once the session has run; empty beforehand */
+  podium: PodiumEntry[];
+}
+
+/** The sessions worth showing for a round: their times and (once run) podiums. */
 export interface RaceResults {
-  qualifying: PodiumEntry[];
-  sprint: PodiumEntry[];
-  race: PodiumEntry[];
+  qualifying: SessionInfo;
+  sprint: SessionInfo;
+  race: SessionInfo;
 }
 
 /** One round of a race series — a multi-day event at a single circuit. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MatchSource, PodiumEntry, RaceEvent } from "@/types";
+import type { MatchSource, RaceEvent, SessionInfo } from "@/types";
 import type { RaceLeagueConfig } from "@/lib/leagues";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
@@ -24,12 +24,17 @@ function formatYear(ms: number): string {
   return String(new Date(ms).getFullYear());
 }
 
-/** Race-session start as "Sun 9:00 AM" in the viewer's local time. */
+/** Session start as "Sun 9:00 AM" in the viewer's local time. */
 function formatRaceStart(ms: number): string {
   const d = new Date(ms);
   const day = d.toLocaleDateString("en-US", { weekday: "short" });
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return `${day} ${time}`;
+}
+
+/** Whether a session has anything worth rendering — a podium or a scheduled time. */
+function hasSession(s: SessionInfo): boolean {
+  return s.podium.length > 0 || s.start !== undefined;
 }
 
 function daysUntil(ms: number): string {
@@ -51,16 +56,22 @@ function shortRider(name: string): string {
   return `${parts[0][0]}. ${parts.slice(1).join(" ")}`;
 }
 
+/**
+ * One session column: its podium once run, otherwise its scheduled time so you
+ * know when it's on. Renders nothing if the session neither happened nor is
+ * scheduled (e.g. no sprint on a non-sprint weekend).
+ */
 function SessionResults({
   label,
-  entries,
+  session,
   muted,
 }: {
   label: string;
-  entries: PodiumEntry[];
+  session: SessionInfo;
   muted: boolean;
 }) {
-  if (entries.length === 0) return null;
+  if (!hasSession(session)) return null;
+  const { podium, start } = session;
   return (
     <div className="min-w-0">
       <p
@@ -69,28 +80,35 @@ function SessionResults({
       >
         {label}
       </p>
-      <div className="flex flex-col gap-0.5">
-        {entries.map((p, i) => (
-          <div key={p.position} className="flex items-baseline gap-1.5 text-[11px]">
-            <span
-              className="font-black tabular-nums w-2 shrink-0"
-              style={{ color: POSITION_COLORS[i] ?? "rgba(255,255,255,0.4)", opacity: muted ? 0.75 : 1 }}
-            >
-              {p.position}
-            </span>
-            <span
-              className="font-bold truncate uppercase tracking-wide"
-              style={{ color: muted ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}
-              title={`${p.rider} · ${p.team}`}
-            >
-              {shortRider(p.rider)}
-            </span>
-            <span className="ml-auto tabular-nums shrink-0 pl-1" style={{ color: "rgba(255,255,255,0.40)" }}>
-              {p.points !== undefined ? `${p.points}` : p.time}
-            </span>
-          </div>
-        ))}
-      </div>
+      {podium.length > 0 ? (
+        <div className="flex flex-col gap-0.5">
+          {podium.map((p, i) => (
+            <div key={p.position} className="flex items-baseline gap-1.5 text-[11px]">
+              <span
+                className="font-black tabular-nums w-2 shrink-0"
+                style={{ color: POSITION_COLORS[i] ?? "rgba(255,255,255,0.4)", opacity: muted ? 0.75 : 1 }}
+              >
+                {p.position}
+              </span>
+              <span
+                className="font-bold truncate uppercase tracking-wide"
+                style={{ color: muted ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.90)", fontFamily: "var(--font-sport)" }}
+                title={`${p.rider} · ${p.team}`}
+              >
+                {shortRider(p.rider)}
+              </span>
+              <span className="ml-auto tabular-nums shrink-0 pl-1" style={{ color: "rgba(255,255,255,0.40)" }}>
+                {p.points !== undefined ? `${p.points}` : p.time}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Not run yet — show when it's scheduled
+        <span className="text-[11px] tabular-nums" style={{ color: "rgba(255,255,255,0.50)" }}>
+          {start !== undefined ? formatRaceStart(start) : ""}
+        </span>
+      )}
     </div>
   );
 }
@@ -99,9 +117,9 @@ function SessionResults({
 function ResultsGrid({ results, muted }: { results: RaceEvent["results"]; muted: boolean }) {
   return (
     <div className="grid gap-x-5 gap-y-3 grid-cols-1 sm:grid-cols-3">
-      <SessionResults label="Qualifying" entries={results.qualifying} muted={muted} />
-      <SessionResults label="Sprint" entries={results.sprint} muted={muted} />
-      <SessionResults label="Race" entries={results.race} muted={muted} />
+      <SessionResults label="Qualifying" session={results.qualifying} muted={muted} />
+      <SessionResults label="Sprint" session={results.sprint} muted={muted} />
+      <SessionResults label="Race" session={results.race} muted={muted} />
     </div>
   );
 }
@@ -123,8 +141,8 @@ export function RaceCard({
   const { sources } = event;
 
   const { qualifying, sprint, race } = event.results;
-  const hasResults = qualifying.length + sprint.length + race.length > 0;
-  const hasExtraSessions = qualifying.length > 0 || sprint.length > 0;
+  const hasResults = hasSession(qualifying) || hasSession(sprint) || hasSession(race);
+  const hasExtraSessions = hasSession(qualifying) || hasSession(sprint);
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
@@ -255,14 +273,14 @@ export function RaceCard({
         </div>
 
         {hasResults && (
-          <div className="pt-2 flex flex-col gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            {/* Race result always; qualifying and sprint behind a toggle so the
+          <div className="pt-1 flex flex-col gap-3">
+            {/* Race always; qualifying and sprint behind a toggle so the
                 calendar stays scannable on a phone. */}
-            <SessionResults label="Race" entries={event.results.race} muted={isPast} />
+            <SessionResults label="Race" session={event.results.race} muted={isPast} />
             {expanded && (
               <>
-                <SessionResults label="Qualifying" entries={event.results.qualifying} muted={isPast} />
-                <SessionResults label="Sprint" entries={event.results.sprint} muted={isPast} />
+                <SessionResults label="Qualifying" session={event.results.qualifying} muted={isPast} />
+                <SessionResults label="Sprint" session={event.results.sprint} muted={isPast} />
               </>
             )}
             {hasExtraSessions && (
@@ -322,7 +340,7 @@ export function RaceCard({
 
         {/* Results span the full card width so three columns have room to breathe */}
         {hasResults && (
-          <div className="pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="pt-2">
             <ResultsGrid results={event.results} muted={isPast} />
           </div>
         )}

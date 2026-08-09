@@ -4,6 +4,7 @@ import type {
   PodiumEntry,
   RaceEvent,
   RaceResults,
+  SessionInfo,
   StandingEntry,
 } from "@/types";
 
@@ -31,7 +32,7 @@ interface APIEvent {
 }
 
 interface APICategory { id: string; name: string }
-interface APISession { id: string; type?: string; number?: number | null; date?: string }
+interface APISession { id: string; type?: string; number?: number | null; date?: string; status?: string }
 
 interface APIClassification {
   position?: number;
@@ -64,11 +65,15 @@ async function currentSeason(): Promise<APISeason | null> {
   );
 }
 
-const NO_RESULTS: RaceResults = { qualifying: [], sprint: [], race: [] };
+const EMPTY_SESSION: SessionInfo = { podium: [] };
+const NO_RESULTS: RaceResults = {
+  qualifying: EMPTY_SESSION,
+  sprint: EMPTY_SESSION,
+  race: EMPTY_SESSION,
+};
 
-/** Top three of one session. */
-async function topThree(session: APISession | undefined): Promise<PodiumEntry[]> {
-  if (!session) return [];
+/** Top three of one finished session, via its classification. */
+async function topThree(session: APISession): Promise<PodiumEntry[]> {
   const result = await getJSON<{ classification?: APIClassification[] }>(
     `${BASE}/session/${session.id}/classification`,
     FINISHED_TTL
@@ -96,24 +101,35 @@ function formatGap(gap?: string): string {
   return gap.startsWith("+") ? gap : `+${gap}`;
 }
 
+/** One session's scheduled time plus, if it has already run, its podium. */
+async function buildSession(session: APISession | undefined): Promise<SessionInfo> {
+  if (!session) return EMPTY_SESSION;
+  const start = session.date ? Date.parse(session.date) : undefined;
+  const finished = (session.status ?? "").toUpperCase() === "FINISHED";
+  const podium = finished ? await topThree(session) : [];
+  return { start, podium };
+}
+
 interface RoundData { results: RaceResults; raceStart?: number }
 
 /**
- * A round's session list gives both the race-session start time (for every
- * round) and, for finished rounds, the podiums via three classification calls.
- * The premier category id is constant across a season, so it's passed in rather
- * than re-fetched per round.
+ * A round's session list gives every session's scheduled time and status; each
+ * *finished* session (which can happen mid-weekend — qualifying and the sprint
+ * complete before Sunday's race) then gets its podium via a classification call.
+ * The premier category id is constant across a season, so it's passed in.
  */
 async function getRoundData(
   eventId: string,
   premierId: string | undefined,
-  finished: boolean
+  eventFinished: boolean
 ): Promise<RoundData> {
   if (!premierId) return { results: NO_RESULTS };
 
   const sessions = await getJSON<APISession[]>(
     `${BASE}/sessions?eventUuid=${eventId}&categoryUuid=${premierId}`,
-    finished ? FINISHED_TTL : SCHEDULE_TTL
+    // A live weekend's session statuses change through the days, so don't hold
+    // the list as long once the whole event is done.
+    eventFinished ? FINISHED_TTL : SCHEDULE_TTL
   );
   if (!sessions) return { results: NO_RESULTS };
 
@@ -122,20 +138,14 @@ async function getRoundData(
   const of = (key: string) =>
     sessions.find((s) => `${s.type ?? ""}${s.number ?? ""}` === key);
 
-  const rac = of("RAC");
-  const raceStart = rac?.date ? Date.parse(rac.date) : undefined;
-
-  // Upcoming rounds: we have the time but no results to fetch yet
-  if (!finished) return { results: NO_RESULTS, raceStart };
-
   const [qualifying, sprint, race] = await Promise.all([
     // Q2 decides the front of the grid; Q1 riders start from P13 back
-    topThree(of("Q2")),
-    topThree(of("SPR")),
-    topThree(rac),
+    buildSession(of("Q2")),
+    buildSession(of("SPR")),
+    buildSession(of("RAC")),
   ]);
 
-  return { results: { qualifying, sprint, race }, raceStart };
+  return { results: { qualifying, sprint, race }, raceStart: race.start };
 }
 
 function isFinished(event: APIEvent): boolean {
