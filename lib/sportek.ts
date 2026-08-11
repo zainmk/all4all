@@ -1,6 +1,13 @@
 import { teamKey } from "@/lib/espn";
 
-const BASE = "https://totalsportekx.is";
+// The sportek family rotates domains constantly (totalsportekx.is → total-sportek.st
+// → …); each redirects to the current canonical host. BASE is where we fetch the
+// listings from; the game links they contain point at whatever host is live.
+const BASE = "https://total-sportek.st";
+
+// A game-page link on ANY sportek-family host, so a domain change doesn't break
+// matching again. Group 1 = full URL, group 2 = "home-vs-away" slug.
+const GAME_LINK = String.raw`https://[a-z0-9.-]*sportek[a-z0-9.-]*/game/([^/"]+)/\d+/?`;
 
 // Sportek slugs use different names than ESPN in some cases.
 // Map sportek display name → ESPN display name so teamKey() matches.
@@ -80,7 +87,7 @@ async function fetchMatchUrls(path: string): Promise<Index> {
     const res = await fetch(`${BASE}${path}`, { next: { revalidate: 300 } });
     if (!res.ok) return index;
     const html = await res.text();
-    const re = /href="(https:\/\/totalsportekx\.is\/game\/([^/"]+)\/\d+\/?)"/g;
+    const re = new RegExp(`href="(${GAME_LINK})"`, "g");
     let m;
     while ((m = re.exec(html)) !== null) {
       const url = m[1];
@@ -110,7 +117,7 @@ export async function getSportekRaceSlugs(
     const res = await fetch(`${BASE}${path}`, { next: { revalidate: 900 } });
     if (!res.ok) return result;
     const html = await res.text();
-    const re = /href="(https:\/\/totalsportek[a-z0-9]*\.is\/game\/([^/"]+)\/\d+\/?)"/g;
+    const re = new RegExp(`href="(${GAME_LINK})"`, "g");
     let m;
     while ((m = re.exec(html)) !== null) {
       const url = m[1];
