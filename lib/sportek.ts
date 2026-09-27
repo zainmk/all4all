@@ -63,8 +63,11 @@ class Index implements SportekIndex {
     const key = teamKey(home, away);
     if (!this.full.has(key)) this.full.set(key, url);
 
+    // Also index under the nickname pairing, so a full-name lookup ("Minnesota
+    // Lynx" / "New York Liberty") still matches a nickname-only sportek slug
+    // ("Lynx-vs-Liberty"). This applies even when nk === key (both sides already
+    // single-word) — that's exactly the nickname-only case that needs it.
     const nk = teamKey(nickname(home), nickname(away));
-    if (nk === key) return; // both sides were single-word; nothing extra to index
     if (this.nick.has(nk) && this.nick.get(nk) !== url) {
       // Ambiguous nickname (e.g. "wings" across two leagues) — don't guess.
       this.nickCollisions.add(nk);

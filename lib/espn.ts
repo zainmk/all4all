@@ -93,20 +93,30 @@ export async function getESPNMatchRange(
   daysAhead: number
 ): Promise<Omit<ESPNMatch, "sources">[]> {
   const now = Date.now();
-  const startStr = espnDateStr(now - daysBack * 86_400_000);
-  const endStr = espnDateStr(now + daysAhead * 86_400_000);
 
-  let events: ESPNEvent[] = [];
-  try {
-    const res = await fetch(
-      `${scoreboardUrl(league)}?dates=${startStr}-${endStr}&limit=100`,
-      { next: { revalidate: 30 } }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      events = (data.events ?? []) as ESPNEvent[];
-    }
-  } catch { /* return empty on network error */ }
+  // Fetch each day individually rather than as a `dates=START-END` range: ESPN's
+  // range query silently returns nothing in the postseason (season type 3), while
+  // single-day queries work year-round. One call per day in the window, merged.
+  const days: string[] = [];
+  for (let off = -daysBack; off <= daysAhead; off++) {
+    days.push(espnDateStr(now + off * 86_400_000));
+  }
+
+  const perDay = await Promise.all(
+    days.map(async (day) => {
+      try {
+        const res = await fetch(`${scoreboardUrl(league)}?dates=${day}&limit=100`, {
+          next: { revalidate: 30 },
+        });
+        if (!res.ok) return [] as ESPNEvent[];
+        const data = await res.json();
+        return (data.events ?? []) as ESPNEvent[];
+      } catch {
+        return [] as ESPNEvent[]; // a single day's failure shouldn't drop the rest
+      }
+    })
+  );
+  const events: ESPNEvent[] = perDay.flat();
 
   const results: Omit<ESPNMatch, "sources">[] = [];
   const seenIds = new Set<string>();
