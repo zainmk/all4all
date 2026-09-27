@@ -60,7 +60,7 @@ export interface TeamLeagueConfig extends LeagueChrome {
 /** Race series: a calendar of multi-day events with a podium, no fixtures. */
 export interface RaceLeagueConfig extends LeagueChrome {
   kind: "race";
-  /** sportek category page listing this series' stream pages */
+  /** Full URL of the sportek category page listing this series' stream pages */
   sportekPath: string;
   /** Standings heading, minus the year — "MotoGP Riders’ Championship" */
   championshipTitle: string;
@@ -112,7 +112,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logo: "/f1-logo.svg",
     logoAlt: "Formula 1",
     logoIsWordmark: true,
-    sportekPath: "/f1-stream/",
+    sportekPath: "https://live.totalsporteki.st/formula1-streams/",
     championshipTitle: "Formula 1 Drivers’ Championship",
     competitorPlural: "drivers",
     desktopPriority: ["sportek", "admin", "delta"],
@@ -139,7 +139,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logo: "/motogp-logo.svg",
     logoAlt: "MotoGP",
     logoIsWordmark: true,
-    sportekPath: "/motogp-stream/",
+    sportekPath: "https://live.totalsporteki.st/motogp-streams/",
     championshipTitle: "MotoGP Riders’ Championship",
     competitorPlural: "riders",
     desktopPriority: ["sportek", "admin", "delta"],

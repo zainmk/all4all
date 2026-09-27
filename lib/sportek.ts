@@ -1,13 +1,28 @@
 import { teamKey } from "@/lib/espn";
 
-// The sportek family rotates domains constantly (totalsportekx.is → total-sportek.st
-// → …); each redirects to the current canonical host. BASE is where we fetch the
-// listings from; the game links they contain point at whatever host is live.
-const BASE = "https://total-sportek.st";
+// The sportek family rotates hosts AND link formats constantly. As of now:
+//   • date listings live at total-sportek.st/date/{today,tomorrow}
+//   • per-sport race pages live at live.totalsporteki.st/<sport>-streams/
+//   • game links are relative + Title-Case: "/Atlanta-Dream-vs-Connecticut-Sun/68571"
+//     (previously "https://…/game/atlanta-dream-vs-connecticut-sun/68571/").
+// When streams silently vanish, re-check these — the format has changed several
+// times. Race category URLs are supplied per league in lib/leagues.ts.
+const LISTINGS_BASE = "https://total-sportek.st";
 
-// A game-page link on ANY sportek-family host, so a domain change doesn't break
-// matching again. Group 1 = full URL, group 2 = "home-vs-away" slug.
-const GAME_LINK = String.raw`https://[a-z0-9.-]*sportek[a-z0-9.-]*/game/([^/"]+)/\d+/?`;
+// A relative game link "/<Home>-vs-<Away>/<id>". Group 1 = slug, group 2 = id.
+// The "-vs-" plus a trailing numeric id is specific enough to skip blog/nav links.
+const LINK_RE = /href="\/([A-Za-z0-9][\w-]*-vs-[\w-]+)\/(\d+)\/?"/g;
+
+/** Absolute game-page URLs found in a listing/category page, against `origin`. */
+function extractLinks(html: string, origin: string): Array<{ slug: string; url: string }> {
+  const out: Array<{ slug: string; url: string }> = [];
+  const re = new RegExp(LINK_RE.source, "g");
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    out.push({ slug: m[1], url: `${origin}/${m[1]}/${m[2]}` });
+  }
+  return out;
+}
 
 // Sportek slugs use different names than ESPN in some cases.
 // Map sportek display name → ESPN display name so teamKey() matches.
@@ -84,15 +99,12 @@ class Index implements SportekIndex {
 async function fetchMatchUrls(path: string): Promise<Index> {
   const index = new Index();
   try {
-    const res = await fetch(`${BASE}${path}`, { next: { revalidate: 300 } });
+    const res = await fetch(`${LISTINGS_BASE}${path}`, { next: { revalidate: 300 } });
     if (!res.ok) return index;
     const html = await res.text();
-    const re = new RegExp(`href="(${GAME_LINK})"`, "g");
-    let m;
-    while ((m = re.exec(html)) !== null) {
-      const url = m[1];
-      const slug = m[2];
-      const vsIdx = slug.indexOf("-vs-");
+    for (const { slug, url } of extractLinks(html, LISTINGS_BASE)) {
+      // "Atlanta-Dream-vs-Connecticut-Sun" → home/away (case-insensitive split)
+      const vsIdx = slug.toLowerCase().indexOf("-vs-");
       if (vsIdx < 1) continue;
       const home = slugToName(slug.substring(0, vsIdx));
       const away = slugToName(slug.substring(vsIdx + 4));
@@ -103,26 +115,26 @@ async function fetchMatchUrls(path: string): Promise<Index> {
 }
 
 /**
- * Raw stream-page URLs from a race-series category page (e.g. "/f1-stream/"),
- * keyed by the round slug with the series prefix and "-vs-live" stripped
- * ("f1-hungarian-grand-prix-vs-live" → "hungarian-grand-prix"). Those pages
- * list the whole calendar without dates, so the caller matches slugs to rounds.
+ * Round-slug → stream-page URL from a race-series category page (a full URL like
+ * "https://live.totalsporteki.st/motogp-streams/"). The series prefix and the
+ * "-vs-Live" suffix are stripped, lower-cased:
+ * "MotoGP-Austrian-Grand-Prix-vs-Live" → "austrian-grand-prix". Those pages list
+ * the whole calendar without dates, so the caller matches slugs to rounds.
  */
 export async function getSportekRaceSlugs(
-  path: string,
+  categoryUrl: string,
   prefix: string
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   try {
-    const res = await fetch(`${BASE}${path}`, { next: { revalidate: 900 } });
+    const res = await fetch(categoryUrl, { next: { revalidate: 900 } });
     if (!res.ok) return result;
     const html = await res.text();
-    const re = new RegExp(`href="(${GAME_LINK})"`, "g");
-    let m;
-    while ((m = re.exec(html)) !== null) {
-      const url = m[1];
-      const slug = m[2].replace(new RegExp(`^${prefix}-`), "").replace(/-vs-live$/, "");
-      if (slug && !result.has(slug)) result.set(slug, url);
+    const origin = new URL(categoryUrl).origin;
+    const strip = new RegExp(`^${prefix}-`);
+    for (const { slug, url } of extractLinks(html, origin)) {
+      const round = slug.toLowerCase().replace(strip, "").replace(/-vs-live$/, "");
+      if (round && !result.has(round)) result.set(round, url);
     }
   } catch { /* scraping failure is non-fatal */ }
   return result;
@@ -134,10 +146,10 @@ export async function getSportekRaceSlugs(
  * country ("GRAND PRIX OF GREAT BRITAIN").
  */
 export async function getSportekRaceIndex(
-  path: string,
+  categoryUrl: string,
   aliases: Record<string, string>
 ): Promise<Map<string, string>> {
-  const slugs = await getSportekRaceSlugs(path, "motogp");
+  const slugs = await getSportekRaceSlugs(categoryUrl, "motogp");
   const result = new Map<string, string>();
   for (const [slug, url] of slugs) {
     const round = aliases[slug] ?? aliases[slug.replace(/-grand-prix$/, "")];
