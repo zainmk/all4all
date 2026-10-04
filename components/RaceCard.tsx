@@ -5,6 +5,7 @@ import type { MatchSource, RaceEvent, SessionInfo } from "@/types";
 import type { RaceLeagueConfig } from "@/lib/leagues";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
+import { ClientTime } from "@/components/ClientTime";
 
 /** "7 – 9 Aug" — a race weekend spans days, so both ends are shown. */
 function formatRange(startMs: number, endMs: number): string {
@@ -24,13 +25,6 @@ function formatYear(ms: number): string {
   return String(new Date(ms).getFullYear());
 }
 
-/** Session start as "Sun 9:00 AM" in the viewer's local time. */
-function formatRaceStart(ms: number): string {
-  const d = new Date(ms);
-  const day = d.toLocaleDateString("en-US", { weekday: "short" });
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  return `${day} ${time}`;
-}
 
 /** Whether a session has anything worth rendering — a podium or a scheduled time. */
 function hasSession(s: SessionInfo): boolean {
@@ -105,9 +99,9 @@ function SessionResults({
         </div>
       ) : (
         // Not run yet — show when it's scheduled
-        <span className="text-[11px] tabular-nums" style={{ color: "rgba(255,255,255,0.50)" }}>
-          {start !== undefined ? formatRaceStart(start) : ""}
-        </span>
+        start !== undefined ? (
+          <ClientTime value={start} weekday className="text-[11px] tabular-nums" style={{ color: "rgba(255,255,255,0.50)" }} />
+        ) : null
       )}
     </div>
   );
@@ -256,7 +250,7 @@ export function RaceCard({
             </div>
             {event.raceStart !== undefined && (
               <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.40)" }}>
-                Race · {formatRaceStart(event.raceStart)}
+                Race · <ClientTime value={event.raceStart} weekday />
               </span>
             )}
           </div>
@@ -315,7 +309,7 @@ export function RaceCard({
             <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatRange(event.dateStart, event.dateEnd)}</span>
             {event.raceStart !== undefined && (
               <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-                Race · {formatRaceStart(event.raceStart)}
+                Race · <ClientTime value={event.raceStart} weekday />
               </span>
             )}
             <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatYear(event.dateStart)}</span>

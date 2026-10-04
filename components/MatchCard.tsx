@@ -6,6 +6,7 @@ import type { TeamLeagueConfig } from "@/lib/leagues";
 import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
 import { TeamDetail, hasDetail } from "@/components/TeamDetail";
+import { ClientTime } from "@/components/ClientTime";
 
 function displayName(name: string): string {
   return /winner|round of/i.test(name) ? "TBD" : name;
@@ -40,9 +41,6 @@ function formatDate(ms: number): string {
   return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
 }
 
-function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
 
 function timeUntil(ms: number): string {
   const diff = ms - Date.now();
@@ -203,8 +201,8 @@ export function MatchCard({
         <div className="flex items-center justify-between">
           {liveIndicator}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{formatTime(kickoffMs)}</span>
+            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} suppressHydrationWarning>{formatDate(kickoffMs)}</span>
+            <ClientTime value={kickoffMs} pad className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }} />
           </div>
         </div>
 
@@ -259,8 +257,8 @@ export function MatchCard({
           >
             <div className="flex flex-col gap-0.5">
               <div className="mb-0.5">{liveIndicator}</div>
-              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>{formatDate(kickoffMs)}</span>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{formatTime(kickoffMs)}</span>
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} suppressHydrationWarning>{formatDate(kickoffMs)}</span>
+              <ClientTime value={kickoffMs} pad className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }} />
               {match.venue && (
                 <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                   <p className="text-xs font-bold leading-tight" style={{ color: "rgba(255,255,255,0.80)" }}>{match.venue.city}{match.venue.country ? `, ${match.venue.country}` : ""}</p>

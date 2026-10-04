@@ -112,6 +112,42 @@ export interface TeamStandingsData {
   conferences: ConferenceStandings[];
 }
 
+// ── Playoff bracket ──────────────────────────────────────────────────────────
+
+export interface BracketTeam {
+  id: string;
+  abbrev: string;
+  name: string;
+  logo?: string;
+  /** League-wide playoff seed (1–8), when known */
+  seed?: number;
+  /** Series wins so far */
+  wins: number;
+  /** Won the series */
+  isWinner: boolean;
+  /** Placeholder (series not yet filled, e.g. the Finals before semis finish) */
+  tbd: boolean;
+}
+
+export interface BracketSeries {
+  round: "first" | "semi" | "final";
+  /** Series length: 3 / 5 / 7 */
+  bestOf: number;
+  teams: [BracketTeam, BracketTeam];
+  /** ESPN's phrase, e.g. "NY wins series 2-0" / "Series starts 10/4" */
+  summary: string;
+  completed: boolean;
+  /** Top-to-bottom position within its round, for bracket layout */
+  slot: number;
+}
+
+export interface PlayoffBracket {
+  year: number;
+  first: BracketSeries[];
+  semi: BracketSeries[];
+  final: BracketSeries[];
+}
+
 export interface GoalEvent {
   scorer: string;   // last name only
   minute: string;   // e.g. "29'", "90'+2'"

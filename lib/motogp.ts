@@ -101,10 +101,72 @@ function formatGap(gap?: string): string {
   return gap.startsWith("+") ? gap : `+${gap}`;
 }
 
+// The MotoGP API reports session times as the *circuit's local wall clock* but
+// stamps them "+00:00" (e.g. the Japanese GP race, 14:00 JST, comes back as
+// "2026-10-04T14:00:00+00:00"). Taken literally that's 9h wrong. So we map each
+// round's country to the circuit's IANA timezone and re-interpret the wall clock
+// there to get the true instant. Keyed by country ISO; add entries as the
+// calendar changes. Countries spanning zones use the specific circuit's zone.
+const CIRCUIT_TZ: Record<string, string> = {
+  TH: "Asia/Bangkok",
+  BR: "America/Sao_Paulo",       // Goiânia
+  US: "America/Chicago",          // Circuit of the Americas, Austin
+  AR: "America/Argentina/Buenos_Aires",
+  ES: "Europe/Madrid",            // Jerez, Catalunya, Aragón, Valencia
+  FR: "Europe/Paris",             // Le Mans
+  IT: "Europe/Rome",              // Mugello, Misano
+  SM: "Europe/Rome",              // San Marino (no IANA zone of its own)
+  HU: "Europe/Budapest",
+  CZ: "Europe/Prague",            // Brno
+  NL: "Europe/Amsterdam",         // Assen
+  DE: "Europe/Berlin",            // Sachsenring
+  GB: "Europe/London",            // Silverstone
+  AT: "Europe/Vienna",            // Red Bull Ring
+  JP: "Asia/Tokyo",               // Motegi
+  ID: "Asia/Makassar",            // Mandalika, Lombok (WITA, UTC+8)
+  AU: "Australia/Melbourne",      // Phillip Island
+  MY: "Asia/Kuala_Lumpur",        // Sepang
+  QA: "Asia/Qatar",               // Lusail
+  PT: "Europe/Lisbon",            // Algarve
+};
+
+/** The offset (minutes) that `timeZone` is at a given UTC instant. */
+function tzOffsetMinutes(timeZone: string, utcMs: number): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(new Date(utcMs))) p[part.type] = part.value;
+  const asIfUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return (asIfUtc - utcMs) / 60_000;
+}
+
+/**
+ * Turn the API's circuit-local-but-"+00:00"-stamped timestamp into the true UTC
+ * instant, given the circuit's timezone. Falls back to a literal parse when the
+ * timezone is unknown (no worse than before).
+ */
+function sessionStartMs(dateStr: string, timeZone: string | undefined): number {
+  const literal = Date.parse(dateStr);
+  if (!timeZone) return literal;
+  // Re-read the wall-clock components and place them in the circuit's zone.
+  const m = dateStr.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return literal;
+  const [, y, mo, d, h, mi] = m.map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  return guess - tzOffsetMinutes(timeZone, guess) * 60_000;
+}
+
 /** One session's scheduled time plus, if it has already run, its podium. */
-async function buildSession(session: APISession | undefined): Promise<SessionInfo> {
+async function buildSession(
+  session: APISession | undefined,
+  timeZone: string | undefined
+): Promise<SessionInfo> {
   if (!session) return EMPTY_SESSION;
-  const start = session.date ? Date.parse(session.date) : undefined;
+  const start = session.date ? sessionStartMs(session.date, timeZone) : undefined;
   const finished = (session.status ?? "").toUpperCase() === "FINISHED";
   const podium = finished ? await topThree(session) : [];
   return { start, podium };
@@ -121,7 +183,8 @@ interface RoundData { results: RaceResults; raceStart?: number }
 async function getRoundData(
   eventId: string,
   premierId: string | undefined,
-  eventFinished: boolean
+  eventFinished: boolean,
+  timeZone: string | undefined
 ): Promise<RoundData> {
   if (!premierId) return { results: NO_RESULTS };
 
@@ -140,9 +203,9 @@ async function getRoundData(
 
   const [qualifying, sprint, race] = await Promise.all([
     // Q2 decides the front of the grid; Q1 riders start from P13 back
-    buildSession(of("Q2")),
-    buildSession(of("SPR")),
-    buildSession(of("RAC")),
+    buildSession(of("Q2"), timeZone),
+    buildSession(of("SPR"), timeZone),
+    buildSession(of("RAC"), timeZone),
   ]);
 
   return { results: { qualifying, sprint, race }, raceStart: race.start };
@@ -178,9 +241,12 @@ export async function getMotoGPSeason(): Promise<Omit<RaceEvent, "sources">[]> {
   );
   const premierId = cats?.find((c) => /^motogp/i.test(c.name))?.id;
 
-  // Every round's sessions give the race start time; finished rounds also get podiums.
+  // Every round's sessions give the race start time; finished rounds also get
+  // podiums. The circuit timezone corrects the API's local-as-UTC timestamps.
   const data = await Promise.all(
-    rounds.map((e) => getRoundData(e.id, premierId, isFinished(e)))
+    rounds.map((e) =>
+      getRoundData(e.id, premierId, isFinished(e), CIRCUIT_TZ[e.country?.iso ?? ""])
+    )
   );
 
   return rounds.map((e, i) => ({
