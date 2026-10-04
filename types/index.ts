@@ -2,6 +2,7 @@ export interface MatchSource {
   source: string;
   id: string;
   url?: string; // direct link override (bypasses embed.st)
+  label?: string; // badge text override (e.g. "MotoGP" / "Moto2"); defaults to `source`
 }
 
 // Used by streamed.pk API helpers only

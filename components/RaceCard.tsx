@@ -31,6 +31,54 @@ function hasSession(s: SessionInfo): boolean {
   return s.podium.length > 0 || s.start !== undefined;
 }
 
+// Approximate run time per session (minutes) — the API gives only start times,
+// so this is how long each is treated as "live". Generous enough to cover F1's
+// longer races; a race is marked finished by the API well within these windows.
+const SESSION_MINUTES: Record<string, number> = { Qualifying: 60, Sprint: 60, Race: 150 };
+
+type SessionStatus =
+  | { live: true; label: string }
+  | { live: false; label: string; start: number };
+
+/**
+ * The weekend's status from the viewer's clock: "live" while a session is under
+ * way, otherwise the next session still to come. Null once all sessions are done.
+ */
+function sessionStatus(results: RaceEvent["results"]): SessionStatus | null {
+  const now = Date.now();
+  const sessions = (
+    [
+      { label: "Qualifying", start: results.qualifying.start },
+      { label: "Sprint", start: results.sprint.start },
+      { label: "Race", start: results.race.start },
+    ] as Array<{ label: string; start: number | undefined }>
+  )
+    .filter((s): s is { label: string; start: number } => s.start !== undefined)
+    .sort((a, b) => a.start - b.start);
+
+  for (const s of sessions) {
+    if (now >= s.start && now < s.start + SESSION_MINUTES[s.label] * 60_000) {
+      return { live: true, label: s.label };
+    }
+  }
+  for (const s of sessions) {
+    if (s.start > now) return { live: false, label: s.label, start: s.start };
+  }
+  return null;
+}
+
+/** "in 3h 20m" / "in 45m" / "in 2d 4h" until `ms`. */
+function countdown(ms: number): string {
+  const diff = ms - Date.now();
+  if (diff <= 0) return "now";
+  const mins = Math.floor(diff / 60_000);
+  const h = Math.floor(mins / 60);
+  const d = Math.floor(h / 24);
+  if (d >= 1) return h % 24 === 0 ? `in ${d}d` : `in ${d}d ${h % 24}h`;
+  if (h >= 1) return mins % 60 === 0 ? `in ${h}h` : `in ${h}h ${mins % 60}m`;
+  return `in ${mins}m`;
+}
+
 function daysUntil(ms: number): string {
   const diff = ms - Date.now();
   if (diff <= 0) return "Under way";
@@ -140,14 +188,10 @@ export function RaceCard({
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
-    const isMobile = window.innerWidth < 768;
-    const order = isMobile ? league.mobilePriority : league.desktopPriority;
-    let target: MatchSource | undefined;
-    for (const name of order) {
-      target = sources.find((s) => s.source === name);
-      if (target) break;
-    }
-    if (!target && !isMobile) target = sources[0];
+    // sources are pre-ordered best-first (premier class → support classes →
+    // sportek), so the top one is the right default — MotoGP, else Moto2, else
+    // Moto3, etc. — which is the fallback we want.
+    const target = sources[0];
     if (!target) return;
     window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
   }
@@ -155,25 +199,34 @@ export function RaceCard({
   // Streams only make sense for a weekend that hasn't finished
   const showStreams = sources.length > 0 && !event.isFinished;
 
-  const statusEl = isLive && !event.isFinished ? (
-    <div className="flex items-center gap-1.5">
-      <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-60" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" style={{ boxShadow: "0 0 6px rgba(239,68,68,0.8)" }} />
-      </span>
-      <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: "#ef4444", textShadow: "0 0 12px rgba(239,68,68,0.5)" }}>
-        Race weekend
-      </span>
-    </div>
-  ) : event.isFinished ? (
+  const status = event.isFinished ? null : sessionStatus(event.results);
+
+  const statusEl = event.isFinished ? (
     <span
       className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest"
       style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.40)" }}
     >
       Final
     </span>
+  ) : status?.live ? (
+    // A session is under way right now → "Qualifying · Live"
+    <div className="flex items-center gap-1.5">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-60" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" style={{ boxShadow: "0 0 6px rgba(239,68,68,0.8)" }} />
+      </span>
+      <span className="text-[11px] font-black uppercase tracking-widest whitespace-nowrap" style={{ color: "#ef4444", textShadow: "0 0 12px rgba(239,68,68,0.5)" }}>
+        {status.label} · Live
+      </span>
+    </div>
+  ) : status ? (
+    // Between sessions → count down to the next one
+    <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "rgba(52,211,153,0.85)" }} suppressHydrationWarning>
+      {status.label} {countdown(status.start)}
+    </span>
   ) : (
-    <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>
+    // Weekend over but not yet marked final (or no session times)
+    <span className="text-[11px] font-semibold" style={{ color: "rgba(255,255,255,0.4)" }}>
       {daysUntil(event.dateStart)}
     </span>
   );
@@ -209,7 +262,7 @@ export function RaceCard({
         }}
       >
         <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-        {s.source}
+        {s.label ?? s.source}
       </a>
     );
   }
@@ -326,7 +379,9 @@ export function RaceCard({
           </div>
 
           <div className="flex items-center justify-end gap-1.5 flex-wrap">
-            {showStreams && isHovered
+            {/* During a live race weekend the stream badges stay visible; otherwise
+                they reveal on hover so the calendar reads cleanly. */}
+            {showStreams && (isHovered || isLive)
               ? sources.map((s) => <StreamBadge key={`${s.source}:${s.id}`} s={s} />)
               : roundBadge}
           </div>
