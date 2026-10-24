@@ -14,16 +14,17 @@ import type { ESPNMatch, MatchSource } from "@/types";
 export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
   const league = LEAGUES[leagueId] as TeamLeagueConfig;
   const now = Date.now();
+  const range = league.matchWindow ?? { back: 3, ahead: 3 };
 
   // Phase 1: core data in parallel
   const [espnMatches, liveAll, todayAll, sportek, standings, bracket] = await Promise.all([
-    getESPNMatchRange(league, 3, 3),
+    getESPNMatchRange(league, range.back, range.ahead),
     getLiveMatches(),
     getTodayMatches(),
-    getSportekIndex(),
+    league.useSportek ? getSportekIndex() : Promise.resolve(null),
     league.hasStandings ? getStandings(league) : Promise.resolve(null),
     // In the postseason this returns the bracket; it's null the rest of the year
-    league.hasStandings ? getPlayoffBracket(league) : Promise.resolve(null),
+    league.hasPlayoffBracket ? getPlayoffBracket(league) : Promise.resolve(null),
   ]);
 
   const streamsDown = liveAll === null && todayAll === null;
@@ -33,6 +34,7 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
     [...(liveAll ?? []), ...(todayAll ?? [])],
     league.streamCategory
   );
+  const keepSources = league.streamedSources ?? ["admin", "echo"];
   const streamLookup = new Map<string, MatchSource[]>();
   for (const m of streamMatches) {
     const home = m.teams?.home?.name;
@@ -41,7 +43,7 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
     const key = teamKey(home, away);
     const existing = streamLookup.get(key) ?? [];
     for (const s of m.sources) {
-      if (s.source !== "admin" && s.source !== "echo") continue;
+      if (!keepSources.includes(s.source)) continue;
       if (!existing.some((e) => e.source === s.source && e.id === s.id)) existing.push(s);
     }
     streamLookup.set(key, existing);
@@ -67,7 +69,7 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
     const key = teamKey(m.homeTeam.name, m.awayTeam.name);
     const custom = getCustomStreams(m.homeTeam.name, m.awayTeam.name);
     const footybite = footybiteMap.get(key) ?? [];
-    const sportekUrl = sportek.find(m.homeTeam.name, m.awayTeam.name);
+    const sportekUrl = sportek?.find(m.homeTeam.name, m.awayTeam.name);
     const sportekSources: MatchSource[] = sportekUrl
       ? [{ source: "sportek", id: `sportek-${key}`, url: sportekUrl }]
       : [];

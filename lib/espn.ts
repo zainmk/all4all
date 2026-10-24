@@ -222,7 +222,7 @@ interface ESPNStandingGroup {
   standings?: { entries?: ESPNStandingEntry[] };
 }
 interface ESPNStandingsResponse {
-  season?: { year?: number };
+  season?: { year?: number; displayName?: string };
   children?: ESPNStandingGroup[];
 }
 
@@ -275,8 +275,10 @@ export async function getStandings(
     // Western conference on the left
     conferences.sort((a, b) => Number(/west/i.test(b.name)) - Number(/west/i.test(a.name)));
 
-    const year = data.season?.year ?? new Date().getFullYear();
-    return { title: `${year} Standings`, conferences };
+    // displayName spans the years for leagues that cross New Year ("2026-27");
+    // the bare year would label that season by the year it ends in.
+    const season = data.season?.displayName ?? data.season?.year ?? new Date().getFullYear();
+    return { title: `${season} Standings`, conferences };
   } catch {
     return null;
   }

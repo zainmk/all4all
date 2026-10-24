@@ -45,7 +45,35 @@ function Streak({ streak }: { streak: string }) {
   );
 }
 
-function ConferenceTable({ conf, accent }: { conf: ConferenceStandings; accent: string }) {
+type Cutoff = NonNullable<TeamLeagueConfig["standingsCutoffs"]>[number];
+
+/** First cutoff (the playoff line) solid, later ones dashed. Shared by rows and legend. */
+function cutoffBorder(index: number, accent: string): string {
+  return index === 0 ? `1px solid rgba(${accent},0.55)` : `1px dashed rgba(${accent},0.4)`;
+}
+
+function CutoffLegend({ cutoffs, accent }: { cutoffs: Cutoff[]; accent: string }) {
+  return (
+    <div className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+      {cutoffs.map((c, i) => (
+        <span key={c.label} className="flex items-center gap-1.5">
+          <span className="w-4" style={{ borderTop: cutoffBorder(i, accent) }} />
+          {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ConferenceTable({
+  conf,
+  accent,
+  cutoffs,
+}: {
+  conf: ConferenceStandings;
+  accent: string;
+  cutoffs: Cutoff[];
+}) {
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between mb-1.5 pb-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -62,11 +90,17 @@ function ConferenceTable({ conf, accent }: { conf: ConferenceStandings; accent: 
       </div>
 
       <div className="flex flex-col">
-        {conf.teams.map((t: TeamStanding, i) => (
+        {conf.teams.map((t: TeamStanding, i) => {
+          // Row i sits directly under position i, so a cutoff "after i" rules its top edge
+          const cut = cutoffs.findIndex((c) => c.after === i);
+          return (
           <div
             key={t.abbrev || t.team}
             className="flex items-center gap-2 py-1.5 text-[11px]"
-            style={{ borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.05)" }}
+            style={{
+              borderTop:
+                i === 0 ? "none" : cut >= 0 ? cutoffBorder(cut, accent) : "1px solid rgba(255,255,255,0.05)",
+            }}
           >
             <span className="w-4 shrink-0 text-right tabular-nums font-bold" style={{ color: "rgba(255,255,255,0.35)" }}>
               {i + 1}
@@ -96,7 +130,8 @@ function ConferenceTable({ conf, accent }: { conf: ConferenceStandings; accent: 
               {t.lastTen}
             </span>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -110,6 +145,7 @@ export function TeamStandingsCard({
   league: TeamLeagueConfig;
 }) {
   const { accent } = league;
+  const cutoffs = league.standingsCutoffs ?? [];
   if (data.conferences.length === 0) return null;
 
   return (
@@ -124,17 +160,20 @@ export function TeamStandingsCard({
       }}
     >
       <div className="px-4 sm:px-5 py-4 flex flex-col gap-3">
-        <h2
-          className="text-[11px] font-black uppercase tracking-widest flex items-center gap-2"
-          style={{ color: `rgba(${accent},0.85)` }}
-        >
-          <Trophy color={`rgba(${accent},0.9)`} />
-          {data.title}
-        </h2>
+        <div className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+          <h2
+            className="text-[11px] font-black uppercase tracking-widest flex items-center gap-2"
+            style={{ color: `rgba(${accent},0.85)` }}
+          >
+            <Trophy color={`rgba(${accent},0.9)`} />
+            {data.title}
+          </h2>
+          {cutoffs.length > 0 && <CutoffLegend cutoffs={cutoffs} accent={accent} />}
+        </div>
 
         <div className="grid gap-x-8 gap-y-5 grid-cols-1 md:grid-cols-2">
           {data.conferences.map((conf) => (
-            <ConferenceTable key={conf.name} conf={conf} accent={accent} />
+            <ConferenceTable key={conf.name} conf={conf} accent={accent} cutoffs={cutoffs} />
           ))}
         </div>
       </div>

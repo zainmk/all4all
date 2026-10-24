@@ -8,10 +8,11 @@ streams aggregated from a few public sources, sorted chronologically around a
 
 | Route     | League  | Shape                                        |
 | --------- | ------- | -------------------------------------------- |
+| `/nba`    | NBA     | Fixtures — same shape as WNBA, streamed.pk only |
 | `/wnba`   | WNBA    | Fixtures — two teams, a score                 |
 | `/motogp` | MotoGP  | Race calendar — one card per Grand Prix weekend, with podium |
 | `/f1`     | F1      | Race calendar — same shape as MotoGP          |
-| `/fifa`   | FIFA 26 | Fixtures (off season)                         |
+| `/fifa`   | FIFA 26 | Fixtures (off season — not in the header switcher) |
 
 `/` redirects to whichever league is in season. To change it, edit the redirect in
 [`next.config.ts`](next.config.ts).

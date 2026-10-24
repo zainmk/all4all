@@ -1,7 +1,7 @@
 // Per-league configuration. Everything that differs between the league pages
 // lives here so the page chrome and cards stay shared.
 
-export type LeagueId = "fifa" | "wnba" | "motogp" | "f1";
+export type LeagueId = "fifa" | "nba" | "wnba" | "motogp" | "f1";
 
 /** Presentation + stream-picking bits every league page needs. */
 interface LeagueChrome {
@@ -38,6 +38,10 @@ export interface TeamLeagueConfig extends LeagueChrome {
   streamCategory: string;
   /** footybite only carries soccer */
   useFootybite: boolean;
+  /** Scrape totalsportek listings for game pages (its link format churns often) */
+  useSportek: boolean;
+  /** streamed.pk sources to keep, in no particular order. Defaults to admin + echo. */
+  streamedSources?: string[];
   /**
    * Detail line under the score. "goals" reads ESPN scoring plays;
    * "none" leaves the card at score only.
@@ -53,8 +57,18 @@ export interface TeamLeagueConfig extends LeagueChrome {
   typicalDurationMins: number;
   /** "kick-off" / "tip-off" — used in empty-state copy */
   startNoun: string;
+  /** Days either side of today to pull from ESPN. Defaults to 3 back, 3 ahead. */
+  matchWindow?: { back: number; ahead: number };
   /** Show an ESPN conference-standings card above the NOW divider */
   hasStandings?: boolean;
+  /**
+   * Swap the standings card for a playoff bracket in the postseason. The bracket
+   * builder in lib/espn.ts assumes the WNBA format (8 teams, best-of-3/5/7
+   * rounds), so leave this off for leagues shaped differently.
+   */
+  hasPlayoffBracket?: boolean;
+  /** Seed lines ruled across each conference table, e.g. playoff / play-in. */
+  standingsCutoffs?: Array<{ after: number; label: string }>;
 }
 
 /** Race series: a calendar of multi-day events with a podium, no fixtures. */
@@ -83,6 +97,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     espnPath: "basketball/wnba",
     streamCategory: "basketball",
     useFootybite: false,
+    useSportek: true,
     detail: "none",
     teamFallback: "initials",
     // ~2h05 of wall-clock for a 40-minute game
@@ -100,7 +115,52 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     ],
     startNoun: "tip-off",
     hasStandings: true,
+    hasPlayoffBracket: true,
     footer: "Streams by totalsportek & streamed.pk · Scores by ESPN",
+  },
+  nba: {
+    kind: "team",
+    id: "nba",
+    href: "/nba",
+    label: "NBA",
+    title: "NBA",
+    description: "Watch live and upcoming NBA games",
+    logo: "/nba-logo.png",
+    logoAlt: "NBA",
+    espnPath: "basketball/nba",
+    streamCategory: "basketball",
+    useFootybite: false,
+    // streamed.pk only — it lists every NBA game, so skip the sportek scrape
+    useSportek: false,
+    // golf carries games admin sometimes misses (fewer viewers, but it plays)
+    streamedSources: ["admin", "echo", "golf"],
+    detail: "none",
+    teamFallback: "initials",
+    // ~2h15 of wall-clock for a 48-minute game
+    typicalDurationMins: 135,
+    // Up to 15 games a night — the default window would bury the page in cards
+    matchWindow: { back: 1, ahead: 2 },
+    desktopPriority: ["admin", "echo", "golf"],
+    mobilePriority: ["echo", "admin"],
+    // The logo's blue, lifted so it reads as text on the dark page
+    accent: "59,130,246",
+    background:
+      "linear-gradient(160deg, #0c1a3d 0%, #0a0f24 30%, #050508 60%, #0d0509 100%)",
+    blobs: [
+      { color: "#1d428a", className: "absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px]", opacity: 0.4, stop: "65%" },
+      { color: "#1e3a8a", className: "absolute -top-10 -left-32 w-[700px] h-[700px]", opacity: 0.28, stop: "65%" },
+      { color: "#c8102e", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.16, stop: "65%" },
+      { color: "#3b82f6", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
+    ],
+    startNoun: "tip-off",
+    hasStandings: true,
+    // No hasPlayoffBracket yet: 16 teams, conference-split, every round best-of-7
+    // plus a play-in — needs its own builder before the April postseason.
+    standingsCutoffs: [
+      { after: 6, label: "Playoffs" },
+      { after: 10, label: "Play-In" },
+    ],
+    footer: "Streams by streamed.pk · Scores by ESPN",
   },
   f1: {
     kind: "race",
@@ -168,6 +228,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     espnPath: "soccer/fifa.world",
     streamCategory: "football",
     useFootybite: true,
+    useSportek: true,
     detail: "goals",
     teamFallback: "flag",
     typicalDurationMins: 95,
@@ -187,5 +248,6 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
   },
 };
 
-// Header switcher order
-export const LEAGUE_ORDER: LeagueId[] = ["wnba", "motogp", "f1", "fifa"];
+// Header switcher order. FIFA is left out between tournaments — /fifa still
+// resolves, it just has no chip (add "fifa" back here to restore it).
+export const LEAGUE_ORDER: LeagueId[] = ["nba", "wnba", "motogp", "f1"];

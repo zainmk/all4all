@@ -6,7 +6,9 @@ export function AppHeader({ active }: { active: LeagueId }) {
   // being centred as a whole. Chips are a fixed width, so the offset is just
   // how many chip-widths the active one sits from the middle.
   const centerIndex = (LEAGUE_ORDER.length - 1) / 2;
-  const shift = centerIndex - LEAGUE_ORDER.indexOf(active);
+  const activeIndex = LEAGUE_ORDER.indexOf(active);
+  // A league with no chip (e.g. /fifa between tournaments) keeps the row centred
+  const shift = activeIndex < 0 ? 0 : centerIndex - activeIndex;
 
   return (
     <header
@@ -18,7 +20,7 @@ export function AppHeader({ active }: { active: LeagueId }) {
         className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center"
       >
         <div
-          className="league-switcher flex items-center gap-2"
+          className="league-switcher flex items-center gap-1 sm:gap-2"
           style={{ "--shift": shift } as React.CSSProperties}
         >
         {LEAGUE_ORDER.map((id) => {
@@ -30,9 +32,13 @@ export function AppHeader({ active }: { active: LeagueId }) {
               href={league.href}
               aria-current={isActive ? "page" : undefined}
               title={isActive ? undefined : `Switch to ${league.label}`}
-              // Equal-width chips; widths step down so all four fit narrow
-              // viewports without overflowing.
-              className={`flex items-center justify-center gap-2.5 select-none rounded-xl w-24 sm:w-36 md:w-44 px-3 py-2 transition-all duration-200 ${
+              // Equal-width chips from sm up; widths step down so every chip
+              // fits without overflowing. Phones can't fit equal chips with a
+              // legible wordmark, so there square logos take a compact chip and
+              // the wide wordmarks share what's left.
+              className={`flex items-center justify-center gap-2.5 select-none rounded-xl ${
+                league.logoIsWordmark ? "w-20" : "w-12"
+              } sm:w-26 lg:w-44 px-2 sm:px-3 py-2 transition-all duration-200 ${
                 isActive ? "opacity-100" : "opacity-45 hover:opacity-90"
               }`}
               style={{
@@ -51,7 +57,7 @@ export function AppHeader({ active }: { active: LeagueId }) {
                 className={
                   league.logoIsWordmark
                     ? "h-6 md:h-7 w-full object-contain"
-                    : "h-8 w-auto max-w-[42%] object-contain shrink-0"
+                    : "h-8 w-auto max-w-full lg:max-w-[42%] object-contain shrink-0"
                 }
                 style={{
                   filter: isActive
@@ -66,9 +72,9 @@ export function AppHeader({ active }: { active: LeagueId }) {
                   <h1 className="sr-only">{league.label}</h1>
                 ) : (
                   <h1
-                    // Hidden on mobile so the chips fit a narrow viewport, but
-                    // kept in the a11y tree rather than display:none.
-                    className="sr-only sm:not-sr-only text-sm md:text-base font-black tracking-widest uppercase whitespace-nowrap"
+                    // Hidden until the chips are wide enough to hold it beside
+                    // the logo, but kept in the a11y tree rather than display:none.
+                    className="sr-only lg:not-sr-only text-base font-black tracking-widest uppercase whitespace-nowrap"
                     style={{
                       color: `rgb(${league.accent})`,
                       textShadow: `0 0 20px rgba(${league.accent},0.35)`,
