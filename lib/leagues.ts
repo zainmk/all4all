@@ -187,7 +187,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#450a0a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.32, stop: "65%" },
       { color: "#dc2626", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
-    footer: "Streams by totalsportek · Results by jolpica (Ergast)",
+    footer: "Streams by totalsportek · Results by jolpica (Ergast) & OpenF1",
   },
   motogp: {
     kind: "race",

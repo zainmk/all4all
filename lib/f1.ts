@@ -7,6 +7,7 @@ import type {
   StandingEntry,
 } from "@/types";
 import { getSportekRaceSlugs } from "@/lib/sportek";
+import { getOpenF1Podiums, type F1SessionKind, type WantedSession } from "@/lib/openf1";
 
 // jolpica — the community-run Ergast successor. Free, no auth.
 const BASE = "https://api.jolpi.ca/ergast/f1";
@@ -143,7 +144,10 @@ function assemblePodiums(
   responses.forEach((json, idx) => {
     const position = idx + 1;
     for (const race of json?.MRData.RaceTable.Races ?? []) {
-      const row = (race.Results ?? race.QualifyingResults ?? race.SprintResults ?? [])[0];
+      // Match on position rather than taking the first row: the position filter
+      // sometimes returns extra rows (2026 Singapore's "P2" query led with P1).
+      const rows = race.Results ?? race.QualifyingResults ?? race.SprintResults ?? [];
+      const row = rows.find((x) => Number(x.position) === position);
       if (!row || !row.Driver) continue;
       const entry = toPodium(row, position, kind);
       const arr = byRound.get(race.round) ?? [];
@@ -193,7 +197,11 @@ function sessionStart(s?: ErgastSession): number | undefined {
   return s?.date ? Date.parse(`${s.date}T${s.time ?? "12:00:00Z"}`) : undefined;
 }
 
-/** The full season calendar, oldest first, with podiums on finished rounds. */
+/**
+ * The full season calendar, oldest first, with podiums on finished rounds.
+ * Podiums come from jolpica, with OpenF1 filling any session jolpica hasn't
+ * published yet (see lib/openf1.ts).
+ */
 export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
   const schedule = await getJSON<{ MRData: { RaceTable: { season?: string; Races: ErgastRace[] } } }>(
     `${BASE}/current.json`,
@@ -216,16 +224,38 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
   // One season-wide fetch (9 calls) covers every round's podiums
   const podiums = await getSeasonPodiums(season);
 
+  // Sessions that have started but that jolpica has no podium for — usually
+  // none, or just the current weekend's. OpenF1 is asked for those alone.
+  const wanted: WantedSession[] = [];
+  for (const { r, raceMs } of withTimes) {
+    const pod = podiums.get(r.round);
+    const starts: Array<[F1SessionKind, number | undefined]> = [
+      ["qualifying", sessionStart(r.Qualifying)],
+      ["sprint", sessionStart(r.Sprint)],
+      ["race", raceMs],
+    ];
+    for (const [kind, start] of starts) {
+      if (start !== undefined && start < now && !pod?.[kind].length) {
+        wanted.push({ round: r.round, kind, start });
+      }
+    }
+  }
+  const latest = await getOpenF1Podiums(season, wanted, now);
+
   return withTimes.map(({ r, raceMs, startMs, finished }, i) => {
     const loc = r.Circuit?.Location;
     const pod = podiums.get(r.round);
+    const fresh = latest.get(r.round);
+    // jolpica's podium wins once it has one; until then, OpenF1's
+    const podium = (kind: F1SessionKind) =>
+      pod?.[kind].length ? pod[kind] : fresh?.[kind] ?? [];
     // Each session carries its scheduled time (from the calendar) plus its
     // podium once run. Sprint has no `start` on non-sprint weekends, so the card
     // simply omits it.
     const results: RaceResults = {
-      qualifying: { start: sessionStart(r.Qualifying), podium: pod?.qualifying ?? [] },
-      sprint: { start: sessionStart(r.Sprint), podium: pod?.sprint ?? [] },
-      race: { start: raceMs, podium: pod?.race ?? [] },
+      qualifying: { start: sessionStart(r.Qualifying), podium: podium("qualifying") },
+      sprint: { start: sessionStart(r.Sprint), podium: podium("sprint") },
+      race: { start: raceMs, podium: podium("race") },
     };
     return {
       id: `f1-${season}-${r.round}`,

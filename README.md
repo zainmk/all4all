@@ -60,6 +60,10 @@ a config entry plus a two-line `app/<league>/page.tsx`.
   rate-limits bursts, so `getF1Season` paces them with `mapLimit` and skips the
   sprint call on non-sprint weekends. Standings movement (▲▼) is computed by diffing
   the two most recent rounds, since the API doesn't report it.
+- **[OpenF1](lib/openf1.ts)** — fills in qualifying/sprint/race podiums jolpica
+  hasn't published yet (it can lag a day or more; OpenF1 has them minutes after the
+  flag). Free tier, no key, but its API closes from 30 min before to 30 min after
+  every live session, so any OpenF1 failure just falls back to jolpica's data.
 
 Both race series render through the shared [`RacePage`](components/RacePage.tsx) /
 [`RaceCard`](components/RaceCard.tsx) / [`StandingsCard`](components/StandingsCard.tsx);
