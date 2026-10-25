@@ -72,6 +72,18 @@ function espnDateStr(ms: number): string {
   return new Date(ms).toISOString().split("T")[0].replace(/-/g, "");
 }
 
+/**
+ * Cache lifetime for one day's scoreboard, by its offset from today. Days two
+ * or more back are all finals and never change. Yesterday stays as hot as today
+ * because late games run past midnight UTC (and ESPN's day boundary isn't UTC).
+ * Future days only change if the schedule does.
+ */
+function dayTtl(offset: number): number {
+  if (offset <= -2) return 86_400;
+  if (offset <= 0) return 30;
+  return 600;
+}
+
 function isFinishedStatus(statusName: string): boolean {
   return (
     statusName === "STATUS_FULL_TIME" ||
@@ -105,16 +117,16 @@ export async function getESPNMatchRange(
   // Fetch each day individually rather than as a `dates=START-END` range: ESPN's
   // range query silently returns nothing in the postseason (season type 3), while
   // single-day queries work year-round. One call per day in the window, merged.
-  const days: string[] = [];
+  const days: Array<{ day: string; offset: number }> = [];
   for (let off = -daysBack; off <= daysAhead; off++) {
-    days.push(espnDateStr(now + off * 86_400_000));
+    days.push({ day: espnDateStr(now + off * 86_400_000), offset: off });
   }
 
   const perDay = await Promise.all(
-    days.map(async (day) => {
+    days.map(async ({ day, offset }) => {
       try {
         const res = await fetch(`${scoreboardUrl(league)}?dates=${day}&limit=100`, {
-          next: { revalidate: 30 },
+          next: { revalidate: dayTtl(offset) },
         });
         if (!res.ok) return [] as ESPNEvent[];
         const data = await res.json();

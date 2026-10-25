@@ -14,6 +14,10 @@ const BASE = "https://api.jolpi.ca/ergast/f1";
 
 const FINISHED_TTL = 86_400; // results never change
 const SCHEDULE_TTL = 3_600;
+// The latest weekend's per-round results, re-checked often until they land
+const RECENT_TTL = 600;
+// How long after its race a weekend still counts as "recent"
+const RECENT_WINDOW_MS = 2 * 86_400_000;
 
 async function getJSON<T>(url: string, revalidate: number): Promise<T | null> {
   try {
@@ -192,6 +196,36 @@ async function getSeasonPodiums(season: string): Promise<Map<string, RoundPodium
   return map;
 }
 
+type RoundJson = { MRData: { RaceTable: { Races: ErgastRace[] } } };
+
+/** Top three of one session's full classification. */
+function topThree(json: RoundJson | null, kind: SessionKind): PodiumEntry[] {
+  const race = json?.MRData.RaceTable.Races[0];
+  const rows = race?.Results ?? race?.QualifyingResults ?? race?.SprintResults ?? [];
+  return [1, 2, 3].flatMap((position) => {
+    const row = rows.find((x) => Number(x.position) === position);
+    return row?.Driver ? [toPodium(row, position, kind)] : [];
+  });
+}
+
+/**
+ * One round's podiums asked of jolpica directly, on a short cache. The season-
+ * wide lists are cached for a day — right for old rounds, but it would hold back
+ * the latest weekend's results for up to a day after jolpica publishes them.
+ */
+async function getRoundPodiums(season: string, round: string, hasSprint: boolean): Promise<RoundPodiums> {
+  const types = hasSprint ? ["qualifying", "sprint", "results"] : ["qualifying", "results"];
+  const [qualifying, a, b] = await fetchSequential<RoundJson>(
+    types.map((t) => `${BASE}/${season}/${round}/${t}.json`),
+    RECENT_TTL
+  );
+  return {
+    qualifying: topThree(qualifying, "quali"),
+    sprint: hasSprint ? topThree(a, "race") : [],
+    race: topThree(hasSprint ? b : a, "race"),
+  };
+}
+
 /** Parse a jolpica session's date+time into ms, if present. */
 function sessionStart(s?: ErgastSession): number | undefined {
   return s?.date ? Date.parse(`${s.date}T${s.time ?? "12:00:00Z"}`) : undefined;
@@ -223,6 +257,25 @@ export async function getF1Season(): Promise<Omit<RaceEvent, "sources">[]> {
 
   // One season-wide fetch (9 calls) covers every round's podiums
   const podiums = await getSeasonPodiums(season);
+
+  // A weekend under way or raced in the last two days, still missing a podium:
+  // re-ask jolpica for that round alone on a short cache. Older rounds stay on
+  // the day-long season lists — their results are settled.
+  for (const { r, raceMs } of withTimes) {
+    const firstStart = Math.min(
+      ...[sessionStart(r.Sprint), sessionStart(r.Qualifying), raceMs].filter((t): t is number => t !== undefined)
+    );
+    if (firstStart > now || now - raceMs > RECENT_WINDOW_MS) continue;
+    const pod = podiums.get(r.round);
+    const complete = !!pod?.qualifying.length && !!pod.race.length && (!r.Sprint || !!pod.sprint.length);
+    if (complete) continue;
+    const fresh = await getRoundPodiums(season, r.round, !!r.Sprint);
+    podiums.set(r.round, {
+      qualifying: pod?.qualifying.length ? pod.qualifying : fresh.qualifying,
+      sprint: pod?.sprint.length ? pod.sprint : fresh.sprint,
+      race: pod?.race.length ? pod.race : fresh.race,
+    });
+  }
 
   // Sessions that have started but that jolpica has no podium for — usually
   // none, or just the current weekend's. OpenF1 is asked for those alone.
