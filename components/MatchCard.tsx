@@ -5,7 +5,7 @@ import type { ESPNMatch, MatchSource } from "@/types";
 import type { TeamLeagueConfig } from "@/lib/leagues";
 import { TeamFlag } from "@/components/TeamFlag";
 import { TeamDetail, hasDetail } from "@/components/TeamDetail";
-import { ClientTime } from "@/components/ClientTime";
+import { ClientDate, ClientTime, useHydrated } from "@/components/ClientTime";
 
 function displayName(name: string): string {
   return /winner|round of/i.test(name) ? "TBD" : name;
@@ -22,13 +22,6 @@ function TeamBadge({ logo, name, className = "w-10 h-10", fallback }: { logo?: s
       onError={() => setFailed(true)}
     />
   );
-}
-
-function formatDate(ms: number): string {
-  const d = new Date(ms);
-  const today = new Date();
-  if (d.toDateString() === today.toDateString()) return "Today";
-  return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
 }
 
 
@@ -55,6 +48,9 @@ export function MatchCard({
   const { sources, date: kickoffMs } = match;
 
   const [isHovered, setIsHovered] = useState(false);
+  // The countdown and the 30-min badge window depend on the current time, which
+  // a cached server render can't know — they wait for the live page
+  const hydrated = useHydrated();
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
@@ -83,7 +79,7 @@ export function MatchCard({
       Postponed
     </span>
   ) : (
-    <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>{timeUntil(kickoffMs)}</span>
+    <span className="text-[11px] font-semibold" style={{ color: "rgba(52,211,153,0.8)" }}>{hydrated ? timeUntil(kickoffMs) : " "}</span>
   );
 
   const scoreOrVs = match.score !== undefined ? (
@@ -113,7 +109,7 @@ export function MatchCard({
 
   // Only show stream badges from 30 min before kickoff through 30 min after finish
   const showStreams = sources.length > 0 &&
-    (isLive || match.isFinished || Date.now() >= kickoffMs - 30 * 60_000);
+    (isLive || match.isFinished || (hydrated && Date.now() >= kickoffMs - 30 * 60_000));
 
   const allBadges = sources;
 
@@ -169,7 +165,7 @@ export function MatchCard({
         <div className="flex items-center justify-between">
           {liveIndicator}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} suppressHydrationWarning>{formatDate(kickoffMs)}</span>
+            <ClientDate value={kickoffMs} relative className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} />
             <ClientTime value={kickoffMs} pad className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }} />
           </div>
         </div>
@@ -225,7 +221,7 @@ export function MatchCard({
           >
             <div className="flex flex-col gap-0.5">
               <div className="mb-0.5">{liveIndicator}</div>
-              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} suppressHydrationWarning>{formatDate(kickoffMs)}</span>
+              <ClientDate value={kickoffMs} relative className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }} />
               <ClientTime value={kickoffMs} pad className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }} />
               {match.venue && (
                 <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>

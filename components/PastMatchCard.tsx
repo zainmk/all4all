@@ -5,7 +5,7 @@ import type { ESPNMatch } from "@/types";
 import type { TeamLeagueConfig } from "@/lib/leagues";
 import { TeamFlag } from "@/components/TeamFlag";
 import { TeamDetail, hasDetail } from "@/components/TeamDetail";
-import { ClientTime } from "@/components/ClientTime";
+import { ClientDate, ClientTime } from "@/components/ClientTime";
 
 function TeamBadge({ logo, name, className = "w-10 h-7", fallback }: { logo?: string; name?: string; className?: string; fallback: "flag" | "initials" }) {
   const [failed, setFailed] = useState(false);
@@ -19,12 +19,6 @@ function TeamBadge({ logo, name, className = "w-10 h-7", fallback }: { logo?: st
       onError={() => setFailed(true)}
     />
   );
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-US", {
-    weekday: "short", day: "numeric", month: "short",
-  });
 }
 
 
@@ -93,7 +87,7 @@ export function PastMatchCard({ match, league }: { match: ESPNMatch; league: Tea
       <div className="md:hidden flex flex-col gap-2 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }} suppressHydrationWarning>{formatDate(match.date)}</span>
+            <ClientDate value={match.date} className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }} />
             <ClientTime value={match.date} pad className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }} />
           </div>
           <MatchTimeBadge matchTime={match.matchTime} accent={league.accent} />
@@ -140,7 +134,7 @@ export function PastMatchCard({ match, league }: { match: ESPNMatch; league: Tea
         style={{ gridTemplateColumns: "1fr 2fr 1fr" }}
       >
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }} suppressHydrationWarning>{formatDate(match.date)}</span>
+          <ClientDate value={match.date} className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.60)" }} />
           <ClientTime value={match.date} pad className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }} />
           {match.venue && (
             <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
