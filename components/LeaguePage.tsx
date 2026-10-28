@@ -1,8 +1,7 @@
-import { getLiveMatches, getTodayMatches, filterByCategory } from "@/lib/api";
 import { getESPNMatchRange, getStandings, getPlayoffBracket, teamKey } from "@/lib/espn";
 import { getCustomStreams } from "@/lib/custom-streams";
-import { getFootybiteStreams } from "@/lib/footybite";
 import { getSportekIndex } from "@/lib/sportek";
+import { getPpvFeed, ppvBuiltLink, ppvForMatch } from "@/lib/ppv";
 import { LEAGUES, type LeagueId, type TeamLeagueConfig } from "@/lib/leagues";
 import { MatchCard } from "@/components/MatchCard";
 import { PastMatchCard } from "@/components/PastMatchCard";
@@ -16,65 +15,33 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
   const now = Date.now();
   const range = league.matchWindow ?? { back: 3, ahead: 3 };
 
-  // Phase 1: core data in parallel
-  const [espnMatches, liveAll, todayAll, sportek, standings, bracket] = await Promise.all([
+  // Core data in parallel
+  const [espnMatches, sportek, ppvFeed, standings, bracket] = await Promise.all([
     getESPNMatchRange(league, range.back, range.ahead),
-    getLiveMatches(),
-    getTodayMatches(),
     league.useSportek ? getSportekIndex() : Promise.resolve(null),
+    league.ppv ? getPpvFeed() : Promise.resolve(null),
     league.hasStandings ? getStandings(league) : Promise.resolve(null),
     // In the postseason this returns the bracket; it's null the rest of the year
     league.hasPlayoffBracket ? getPlayoffBracket(league) : Promise.resolve(null),
   ]);
 
-  const streamsDown = liveAll === null && todayAll === null;
+  // ppv.st: its listing when the API answered; otherwise built links, but only
+  // for leagues whose URL pattern has been verified (league.ppv.path)
+  const ppvFor = (m: (typeof espnMatches)[number]): MatchSource[] => {
+    if (!league.ppv) return [];
+    if (ppvFeed) return ppvForMatch(ppvFeed, league.ppv.tag, m);
+    return league.ppv.path ? ppvBuiltLink(league.ppv.path, m) : [];
+  };
 
-  // Build team-key → sources lookup from streamed.pk (live + today)
-  const streamMatches = filterByCategory(
-    [...(liveAll ?? []), ...(todayAll ?? [])],
-    league.streamCategory
-  );
-  const keepSources = league.streamedSources ?? ["admin", "echo"];
-  const streamLookup = new Map<string, MatchSource[]>();
-  for (const m of streamMatches) {
-    const home = m.teams?.home?.name;
-    const away = m.teams?.away?.name;
-    if (!home || !away) continue;
-    const key = teamKey(home, away);
-    const existing = streamLookup.get(key) ?? [];
-    for (const s of m.sources) {
-      if (!keepSources.includes(s.source)) continue;
-      if (!existing.some((e) => e.source === s.source && e.id === s.id)) existing.push(s);
-    }
-    streamLookup.set(key, existing);
-  }
-
-  // Phase 2: fetch footybite streams for active/upcoming matches in parallel
-  // (past matches don't need streams; future matches return empty quickly and are cached)
-  const activeEspn = espnMatches.filter(
-    (m) => !m.isFinished || (m.hideAfterMs !== undefined && now < m.hideAfterMs)
-  );
-  const footybiteResults = league.useFootybite
-    ? await Promise.all(
-        activeEspn.map(async (m) => ({
-          key: teamKey(m.homeTeam.name, m.awayTeam.name),
-          sources: await getFootybiteStreams(m.homeTeam.name, m.awayTeam.name),
-        }))
-      )
-    : [];
-  const footybiteMap = new Map(footybiteResults.map((r) => [r.key, r.sources]));
-
-  // Combine all sources: custom → footybite → sportek → streamed.pk
+  // Combine all sources: custom → sportek → ppv.st
   const allMatches: ESPNMatch[] = espnMatches.map((m) => {
     const key = teamKey(m.homeTeam.name, m.awayTeam.name);
     const custom = getCustomStreams(m.homeTeam.name, m.awayTeam.name);
-    const footybite = footybiteMap.get(key) ?? [];
     const sportekUrl = sportek?.find(m.homeTeam.name, m.awayTeam.name);
     const sportekSources: MatchSource[] = sportekUrl
       ? [{ source: "sportek", id: `sportek-${key}`, url: sportekUrl }]
       : [];
-    const streamed = streamLookup.get(key) ?? [];
-    return { ...m, sources: [...custom, ...footybite, ...sportekSources, ...streamed] };
+    return { ...m, sources: [...custom, ...sportekSources, ...ppvFor(m)] };
   });
 
   const past = allMatches.filter(
@@ -113,11 +80,7 @@ export async function LeaguePage({ leagueId }: { leagueId: LeagueId }) {
         ) : null
       }
       emptyMessage="No matches found."
-      nothingUpcomingMessage={
-        streamsDown
-          ? "Streams unavailable — streamed.pk may be down. Retrying shortly."
-          : `No live streams right now — check back closer to ${league.startNoun}.`
-      }
+      nothingUpcomingMessage={`No live streams right now — check back closer to ${league.startNoun}.`}
     />
   );
 }

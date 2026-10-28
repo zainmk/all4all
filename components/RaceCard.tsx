@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { MatchSource, RaceEvent, SessionInfo } from "@/types";
 import type { RaceLeagueConfig } from "@/lib/leagues";
-import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
 import { ClientTime } from "@/components/ClientTime";
 
@@ -28,7 +27,7 @@ function formatYear(ms: number): string {
 
 /** Whether a session has anything worth rendering — a podium or a scheduled time. */
 function hasSession(s: SessionInfo): boolean {
-  return s.podium.length > 0 || s.start !== undefined;
+  return s.podium.length > 0 || s.start !== undefined || !!s.cancelled;
 }
 
 // Approximate run time per session (minutes) — the API gives only start times,
@@ -145,6 +144,10 @@ function SessionResults({
             </div>
           ))}
         </div>
+      ) : session.cancelled ? (
+        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.40)" }}>
+          Cancelled
+        </span>
       ) : (
         // Not run yet — show when it's scheduled
         start !== undefined ? (
@@ -188,12 +191,10 @@ export function RaceCard({
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
-    // sources are pre-ordered best-first (premier class → support classes →
-    // sportek), so the top one is the right default — MotoGP, else Moto2, else
-    // Moto3, etc. — which is the fallback we want.
+    // The round's best stream page — ppv.st's when listed, else sportek's
     const target = sources[0];
     if (!target) return;
-    window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
+    window.open(target.url, "_blank", "noopener,noreferrer");
   }
 
   // Streams only make sense for a weekend that hasn't finished
@@ -206,7 +207,7 @@ export function RaceCard({
       className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest"
       style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.40)" }}
     >
-      Final
+      {event.results.race.cancelled ? "Race cancelled" : "Final"}
     </span>
   ) : status?.live ? (
     // A session is under way right now → "Qualifying · Live"
@@ -247,7 +248,7 @@ export function RaceCard({
   function StreamBadge({ s }: { s: MatchSource }) {
     return (
       <a
-        href={s.url ?? embedUrl(s.source, s.id)}
+        href={s.url}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150"

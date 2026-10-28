@@ -8,11 +8,10 @@ streams aggregated from a few public sources, sorted chronologically around a
 
 | Route     | League  | Shape                                        |
 | --------- | ------- | -------------------------------------------- |
-| `/nba`    | NBA     | Fixtures — same shape as WNBA, streamed.pk only |
+| `/nba`    | NBA     | Fixtures — same shape as WNBA                 |
 | `/wnba`   | WNBA    | Fixtures — two teams, a score                 |
 | `/motogp` | MotoGP  | Race calendar — one card per Grand Prix weekend, with podium |
 | `/f1`     | F1      | Race calendar — same shape as MotoGP          |
-| `/fifa`   | FIFA 26 | Fixtures (off season — not in the header switcher) |
 
 `/` redirects to whichever league is in season. To change it, edit the redirect in
 [`next.config.ts`](next.config.ts).
@@ -49,8 +48,12 @@ a config entry plus a two-line `app/<league>/page.tsx`.
 - **[totalsportek](lib/sportek.ts)** — scrapes today/tomorrow listings for stream
   page URLs. Matches by team pair, falling back to nicknames and reversed
   home/away ordering.
-- **[streamed.pk](lib/api.ts)** — `admin` and `echo` stream sources.
-- **[footybite](lib/footybite.ts)** — English-language broadcast feeds. Soccer only.
+- **[ppv.st](lib/ppv.ts)** — stream pages for every league, from its public API
+  ([docs](https://ppv.st/api); server-side use with caching is allowed). Team
+  games match on league tag + both team names; race weekends on series keywords +
+  the weekend's dates. Mirrors come from `/api/ping`, so a domain change doesn't
+  need a code change. NBA falls back to built links
+  (`/live/nba/<US Eastern date>/<away>-<home>`) if the API is down.
 - **[motogp.com](lib/motogp.ts)** — race calendar, circuits and podiums, via the
   public `api.motogp.pulselive.com` endpoints. Podium lookup is three chained calls
   (categories → sessions → classification) so it only runs for finished rounds, and

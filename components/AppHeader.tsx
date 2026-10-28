@@ -6,9 +6,7 @@ export function AppHeader({ active }: { active: LeagueId }) {
   // being centred as a whole. Chips are a fixed width, so the offset is just
   // how many chip-widths the active one sits from the middle.
   const centerIndex = (LEAGUE_ORDER.length - 1) / 2;
-  const activeIndex = LEAGUE_ORDER.indexOf(active);
-  // A league with no chip (e.g. /fifa between tournaments) keeps the row centred
-  const shift = activeIndex < 0 ? 0 : centerIndex - activeIndex;
+  const shift = centerIndex - LEAGUE_ORDER.indexOf(active);
 
   return (
     <header

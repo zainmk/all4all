@@ -1,24 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ESPNMatch, MatchSource } from "@/types";
 import type { TeamLeagueConfig } from "@/lib/leagues";
-import { embedUrl } from "@/lib/api";
 import { TeamFlag } from "@/components/TeamFlag";
 import { TeamDetail, hasDetail } from "@/components/TeamDetail";
 import { ClientTime } from "@/components/ClientTime";
 
 function displayName(name: string): string {
   return /winner|round of/i.test(name) ? "TBD" : name;
-}
-
-/**
- * First source matching `name`. On desktop an "admin" pick skips url-bearing
- * entries, which are manual overrides meant to be reached from their own badge.
- */
-function pick(sources: MatchSource[], name: string, strictAdmin: boolean): MatchSource | undefined {
-  if (name === "admin" && strictAdmin) return sources.find((s) => s.source === "admin" && !s.url);
-  return sources.find((s) => s.source === name);
 }
 
 function TeamBadge({ logo, name, className = "w-10 h-10", fallback }: { logo?: string; name?: string; className?: string; fallback: "flag" | "initials" }) {
@@ -65,39 +55,17 @@ export function MatchCard({
   const { sources, date: kickoffMs } = match;
 
   const [isHovered, setIsHovered] = useState(false);
-  const [bestSource, setBestSource] = useState<MatchSource | null>(null);
-
-  useEffect(() => {
-    if (sources.length === 0) return;
-    let cancelled = false;
-    const query = sources.map((s) => `${s.source}:${s.id}`).join(",");
-    fetch(`/api/viewers?sources=${encodeURIComponent(query)}`)
-      .then((r) => r.json())
-      .then(({ best, all }: { best: { source: string; id: string } | null; all: { source: string; viewers: number }[] }) => {
-        if (cancelled) return;
-        if (best) {
-          const matched = sources.find((s) => s.source === best.source && s.id === best.id);
-          if (matched) setBestSource(matched);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [match.id]);
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
     const isMobile = window.innerWidth < 768;
     // Mobile can only play a subset of sources, so it has its own (shorter) order
-    // and deliberately no highest-viewer / first-source fallback.
+    // and deliberately no first-source fallback.
     const order = isMobile ? league.mobilePriority : league.desktopPriority;
-    let target: MatchSource | null | undefined;
-    for (const name of order) {
-      target = pick(sources, name, !isMobile);
-      if (target) break;
-    }
-    if (!target && !isMobile) target = bestSource ?? sources[0];
+    let target = order.map((name) => sources.find((s) => s.source === name)).find(Boolean);
+    if (!target && !isMobile) target = sources[0];
     if (!target) return;
-    window.open(target.url ?? embedUrl(target.source, target.id), "_blank", "noopener,noreferrer");
+    window.open(target.url, "_blank", "noopener,noreferrer");
   }
 
   const liveIndicator = isLive ? (
@@ -152,7 +120,7 @@ export function MatchCard({
   function StreamBadge({ s }: { s: MatchSource }) {
     return (
       <a
-        href={s.url ?? embedUrl(s.source, s.id)}
+        href={s.url}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150"

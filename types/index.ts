@@ -1,16 +1,9 @@
 export interface MatchSource {
   source: string;
   id: string;
-  url?: string; // direct link override (bypasses embed.st)
-  label?: string; // badge text override (e.g. "MotoGP" / "Moto2"); defaults to `source`
-}
-
-// Used by streamed.pk API helpers only
-export interface TeamInfo { name: string; badge: string; }
-export interface Teams { home?: TeamInfo; away?: TeamInfo; }
-export interface Match {
-  id: string; title: string; category: string; date: number;
-  poster?: string; popular?: boolean; teams?: Teams; sources: MatchSource[];
+  /** The page the badge (and a card click) opens */
+  url: string;
+  label?: string; // badge text override; defaults to `source`
 }
 
 export interface PodiumEntry {
@@ -28,6 +21,8 @@ export interface SessionInfo {
   start?: number;
   /** Top three, once the session has run; empty beforehand */
   podium: PodiumEntry[];
+  /** Called off (weather, safety) — the card says so instead of showing a time */
+  cancelled?: boolean;
 }
 
 /** The sessions worth showing for a round: their times and (once run) podiums. */
@@ -157,6 +152,8 @@ export interface GoalEvent {
 
 export interface TeamInfoESPN {
   name: string;
+  /** ESPN's short code, e.g. "BKN" */
+  abbrev?: string;
   logo?: string;
   winner?: boolean;
 }

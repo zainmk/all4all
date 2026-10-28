@@ -27,14 +27,7 @@ function extractLinks(html: string, origin: string): Array<{ slug: string; url: 
 // Sportek slugs use different names than ESPN in some cases.
 // Map sportek display name → ESPN display name so teamKey() matches.
 // Add entries here when a mismatch is discovered.
-const NAME_MAP: Record<string, string> = {
-  "Cape Verde Islands": "Cape Verde",
-  "Ivory Coast":        "Côte d'Ivoire",
-  "USA":                "United States",
-  "Korea Republic":     "South Korea",
-  "Korea DPR":          "North Korea",
-  "DR Congo":           "Congo DR",
-};
+const NAME_MAP: Record<string, string> = {};
 
 function slugToName(slug: string): string {
   const name = slug.replace(/-/g, " ");

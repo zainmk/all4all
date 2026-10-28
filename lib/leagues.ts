@@ -1,7 +1,7 @@
 // Per-league configuration. Everything that differs between the league pages
 // lives here so the page chrome and cards stay shared.
 
-export type LeagueId = "fifa" | "nba" | "wnba" | "motogp" | "f1";
+export type LeagueId = "nba" | "wnba" | "motogp" | "f1";
 
 /** Presentation + stream-picking bits every league page needs. */
 interface LeagueChrome {
@@ -22,26 +22,27 @@ interface LeagueChrome {
   background: string;
   /** Ambient glow blobs */
   blobs: Array<{ color: string; className: string; opacity: number; stop: string }>;
-  /** Desktop click-through order, by source name. First match wins. */
-  desktopPriority: string[];
-  /** Mobile click-through order — only sources that work in a mobile browser. */
-  mobilePriority: string[];
   footer: string;
 }
 
 /** Fixture-based leagues: two teams, a score, an ESPN scoreboard. */
 export interface TeamLeagueConfig extends LeagueChrome {
   kind: "team";
-  /** ESPN scoreboard path segment, e.g. "soccer/fifa.world" */
+  /** ESPN scoreboard path segment, e.g. "basketball/nba" */
   espnPath: string;
-  /** streamed.pk `category` value for this league */
-  streamCategory: string;
-  /** footybite only carries soccer */
-  useFootybite: boolean;
   /** Scrape totalsportek listings for game pages (its link format churns often) */
   useSportek: boolean;
-  /** streamed.pk sources to keep, in no particular order. Defaults to admin + echo. */
-  streamedSources?: string[];
+  /**
+   * ppv.st listing for this league. `tag` is ppv's league tag ("NBA"); games are
+   * matched against its API on that plus both team names. `path` ("nba") opts
+   * into built links when the API is unreachable — only set it where ppv's URL
+   * pattern has been checked against real listings (see lib/ppv.ts).
+   */
+  ppv?: { tag: string; path?: string };
+  /** Desktop click-through order, by source name. First match wins. */
+  desktopPriority: string[];
+  /** Mobile click-through order — only sources that work in a mobile browser. */
+  mobilePriority: string[];
   /**
    * Detail line under the score. "goals" reads ESPN scoring plays;
    * "none" leaves the card at score only.
@@ -76,6 +77,11 @@ export interface RaceLeagueConfig extends LeagueChrome {
   kind: "race";
   /** Full URL of the sportek category page listing this series' stream pages */
   sportekPath: string;
+  /**
+   * Words that identify this series in a ppv.st listing's tag or title. A
+   * listing matching one, inside the race weekend, becomes the round's link.
+   */
+  ppvKeywords?: string[];
   /** Standings heading, minus the year — "MotoGP Riders’ Championship" */
   championshipTitle: string;
   /** Plural competitor noun for the standings expand button — "riders" / "drivers" */
@@ -95,15 +101,16 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logo: "/wnba-logo.png",
     logoAlt: "WNBA",
     espnPath: "basketball/wnba",
-    streamCategory: "basketball",
-    useFootybite: false,
     useSportek: true,
     detail: "none",
     teamFallback: "initials",
     // ~2h05 of wall-clock for a 40-minute game
     typicalDurationMins: 125,
-    desktopPriority: ["sportek", "admin", "echo"],
-    mobilePriority: ["echo", "admin"],
+    // No built-link fallback: ppv's WNBA URLs haven't been seen yet
+    ppv: { tag: "WNBA" },
+    desktopPriority: ["ppv", "sportek"],
+    // sportek pages don't play in a mobile browser
+    mobilePriority: ["ppv"],
     accent: "249,115,22",
     background:
       "linear-gradient(160deg, #3a1205 0%, #1d0c07 30%, #080505 60%, #0a0509 100%)",
@@ -116,7 +123,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     startNoun: "tip-off",
     hasStandings: true,
     hasPlayoffBracket: true,
-    footer: "Streams by totalsportek & streamed.pk · Scores by ESPN",
+    footer: "Streams by ppv.st & totalsportek · Scores by ESPN",
   },
   nba: {
     kind: "team",
@@ -128,20 +135,16 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logo: "/nba-logo.png",
     logoAlt: "NBA",
     espnPath: "basketball/nba",
-    streamCategory: "basketball",
-    useFootybite: false,
-    // streamed.pk only — it lists every NBA game, so skip the sportek scrape
     useSportek: false,
-    // golf carries games admin sometimes misses (fewer viewers, but it plays)
-    streamedSources: ["admin", "echo", "golf"],
+    ppv: { tag: "NBA", path: "nba" },
     detail: "none",
     teamFallback: "initials",
     // ~2h15 of wall-clock for a 48-minute game
     typicalDurationMins: 135,
     // Up to 15 games a night — the default window would bury the page in cards
     matchWindow: { back: 1, ahead: 2 },
-    desktopPriority: ["admin", "echo", "golf"],
-    mobilePriority: ["echo", "admin"],
+    desktopPriority: ["ppv"],
+    mobilePriority: ["ppv"],
     // The logo's blue, lifted so it reads as text on the dark page
     accent: "59,130,246",
     background:
@@ -160,7 +163,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { after: 6, label: "Playoffs" },
       { after: 10, label: "Play-In" },
     ],
-    footer: "Streams by streamed.pk · Scores by ESPN",
+    footer: "Streams by ppv.st · Scores by ESPN",
   },
   f1: {
     kind: "race",
@@ -173,10 +176,9 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logoAlt: "Formula 1",
     logoIsWordmark: true,
     sportekPath: "https://live.totalsporteki.st/formula1-streams/",
+    ppvKeywords: ["formula 1", "formula one", "f1"],
     championshipTitle: "Formula 1 Drivers’ Championship",
     competitorPlural: "drivers",
-    desktopPriority: ["sportek", "admin", "delta"],
-    mobilePriority: ["echo", "admin"],
     // The red from the logo (#DE1101)
     accent: "222,17,1",
     background:
@@ -187,7 +189,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#450a0a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.32, stop: "65%" },
       { color: "#dc2626", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
-    footer: "Streams by totalsportek · Results by jolpica (Ergast) & OpenF1",
+    footer: "Streams by ppv.st & totalsportek · Results by jolpica (Ergast) & OpenF1",
   },
   motogp: {
     kind: "race",
@@ -200,10 +202,9 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logoAlt: "MotoGP",
     logoIsWordmark: true,
     sportekPath: "https://live.totalsporteki.st/motogp-streams/",
+    ppvKeywords: ["motogp", "moto gp"],
     championshipTitle: "MotoGP Riders’ Championship",
     competitorPlural: "riders",
-    desktopPriority: ["sportek", "admin", "delta"],
-    mobilePriority: ["echo", "admin"],
     // Monochrome graphite to match the black/silver wordmark, not the old crimson
     accent: "161,161,170",
     background:
@@ -214,40 +215,9 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#27272a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.35, stop: "65%" },
       { color: "#71717a", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
-    footer: "Streams by totalsportek · Results by motogp.com",
-  },
-  fifa: {
-    kind: "team",
-    id: "fifa",
-    href: "/fifa",
-    label: "FIFA26",
-    title: "FIFA 26",
-    description: "Watch live and upcoming football matches",
-    logo: "/fifa26-logo.png",
-    logoAlt: "FIFA 26",
-    espnPath: "soccer/fifa.world",
-    streamCategory: "football",
-    useFootybite: true,
-    useSportek: true,
-    detail: "goals",
-    teamFallback: "flag",
-    typicalDurationMins: 95,
-    desktopPriority: ["tsn", "fox", "itv1", "bbc", "admin", "sportek"],
-    mobilePriority: ["echo", "admin"],
-    accent: "251,191,36",
-    background:
-      "linear-gradient(160deg, #0d1a3a 0%, #090d1f 30%, #050508 60%, #080d0a 100%)",
-    blobs: [
-      { color: "#92400e", className: "absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px]", opacity: 0.35, stop: "65%" },
-      { color: "#1e3a8a", className: "absolute -top-10 -left-32 w-[700px] h-[700px]", opacity: 0.25, stop: "65%" },
-      { color: "#064e3b", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.2, stop: "65%" },
-      { color: "#1d4ed8", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.1, stop: "70%" },
-    ],
-    startNoun: "kick-off",
-    footer: "Streams by streamed.pk · Scores by ESPN",
+    footer: "Streams by ppv.st & totalsportek · Results by motogp.com",
   },
 };
 
-// Header switcher order. FIFA is left out between tournaments — /fifa still
-// resolves, it just has no chip (add "fifa" back here to restore it).
+// Header switcher order
 export const LEAGUE_ORDER: LeagueId[] = ["nba", "wnba", "motogp", "f1"];

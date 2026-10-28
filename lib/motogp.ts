@@ -167,9 +167,9 @@ async function buildSession(
 ): Promise<SessionInfo> {
   if (!session) return EMPTY_SESSION;
   const start = session.date ? sessionStartMs(session.date, timeZone) : undefined;
-  const finished = (session.status ?? "").toUpperCase() === "FINISHED";
-  const podium = finished ? await topThree(session) : [];
-  return { start, podium };
+  const status = (session.status ?? "").toUpperCase();
+  const podium = status === "FINISHED" ? await topThree(session) : [];
+  return status === "CANCELLED" ? { start, podium, cancelled: true } : { start, podium };
 }
 
 interface RoundData { results: RaceResults; raceStart?: number }
@@ -249,20 +249,26 @@ export async function getMotoGPSeason(): Promise<Omit<RaceEvent, "sources">[]> {
     )
   );
 
-  return rounds.map((e, i) => ({
-    id: e.id,
-    name: titleCase(e.name),
-    shortName: e.short_name,
-    countryIso: e.country?.iso ?? "",
-    circuit: e.circuit?.name ?? "",
-    place: e.circuit?.place ?? "",
-    dateStart: Date.parse(e.date_start!),
-    dateEnd: e.date_end ? Date.parse(e.date_end) : Date.parse(e.date_start!),
-    raceStart: data[i].raceStart,
-    isFinished: isFinished(e),
-    round: i + 1,
-    results: data[i].results,
-  }));
+  return rounds.map((e, i) => {
+    const { race } = data[i].results;
+    return {
+      id: e.id,
+      name: titleCase(e.name),
+      shortName: e.short_name,
+      countryIso: e.country?.iso ?? "",
+      circuit: e.circuit?.name ?? "",
+      place: e.circuit?.place ?? "",
+      dateStart: Date.parse(e.date_start!),
+      dateEnd: e.date_end ? Date.parse(e.date_end) : Date.parse(e.date_start!),
+      raceStart: data[i].raceStart,
+      // The event status can stall: Australia 2026's race was cancelled and the
+      // event stayed "CURRENT" for days after. A race with a result, or one
+      // that was called off, ends the weekend whatever the event status says.
+      isFinished: isFinished(e) || race.podium.length > 0 || !!race.cancelled,
+      round: i + 1,
+      results: data[i].results,
+    };
+  });
 }
 
 interface APIStanding {

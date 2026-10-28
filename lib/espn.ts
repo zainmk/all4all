@@ -25,7 +25,7 @@ interface ESPNCompetitor {
   homeAway: "home" | "away";
   score?: string;
   winner?: boolean;
-  team: { id?: string; displayName: string; logo?: string };
+  team: { id?: string; displayName: string; abbreviation?: string; logo?: string };
 }
 
 interface ESPNDetail {
@@ -57,7 +57,7 @@ function normalize(name: string): string {
     name.toLowerCase()
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '') // strip combining diacritics (é->e, í->i, etc.)
-      // streamed.pk suffixes women's teams with a standalone " W" ("Dallas Wings W")
+      // some sources suffix women's teams with a standalone " W" ("Dallas Wings W")
       .replace(/\s+w$/, '')
       .replace(/[^a-z0-9]/g, '')
   );
@@ -201,8 +201,8 @@ export async function getESPNMatchRange(
     results.push({
       id: event.id,
       date: event.date ? new Date(event.date).getTime() : 0,
-      homeTeam: { name: home.team.displayName, logo: home.team.logo, winner: home.winner },
-      awayTeam: { name: away.team.displayName, logo: away.team.logo, winner: away.winner },
+      homeTeam: { name: home.team.displayName, abbrev: home.team.abbreviation, logo: home.team.logo, winner: home.winner },
+      awayTeam: { name: away.team.displayName, abbrev: away.team.abbreviation, logo: away.team.logo, winner: away.winner },
       score: hasScore
         ? { home: parseInt(home.score!, 10), away: parseInt(away.score!, 10) }
         : undefined,
