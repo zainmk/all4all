@@ -15,6 +15,14 @@ const BASE = `${API}/results`;
 // Results for a finished race never change, so they can be cached hard.
 const FINISHED_TTL = 86_400;
 const SCHEDULE_TTL = 3_600;
+// A weekend in progress: session statuses, results and standings land through
+// the day, so they're re-checked every couple of minutes rather than hourly.
+const LIVE_TTL = 120;
+
+/** From the day before first practice to the day after the race (dateEnd is a bare date). */
+function inLiveWeekend(dateStart: number, dateEnd: number, now: number): boolean {
+  return now >= dateStart - 86_400_000 && now <= dateEnd + 2 * 86_400_000;
+}
 
 interface APISeason { id: string; year: number; current?: boolean }
 
@@ -73,10 +81,10 @@ const NO_RESULTS: RaceResults = {
 };
 
 /** Top three of one finished session, via its classification. */
-async function topThree(session: APISession): Promise<PodiumEntry[]> {
+async function topThree(session: APISession, ttl: number): Promise<PodiumEntry[]> {
   const result = await getJSON<{ classification?: APIClassification[] }>(
     `${BASE}/session/${session.id}/classification`,
-    FINISHED_TTL
+    ttl
   );
 
   return (result?.classification ?? [])
@@ -163,12 +171,13 @@ function sessionStartMs(dateStr: string, timeZone: string | undefined): number {
 /** One session's scheduled time plus, if it has already run, its podium. */
 async function buildSession(
   session: APISession | undefined,
-  timeZone: string | undefined
+  timeZone: string | undefined,
+  ttl: number
 ): Promise<SessionInfo> {
   if (!session) return EMPTY_SESSION;
   const start = session.date ? sessionStartMs(session.date, timeZone) : undefined;
   const status = (session.status ?? "").toUpperCase();
-  const podium = status === "FINISHED" ? await topThree(session) : [];
+  const podium = status === "FINISHED" ? await topThree(session, ttl) : [];
   return status === "CANCELLED" ? { start, podium, cancelled: true } : { start, podium };
 }
 
@@ -178,21 +187,22 @@ interface RoundData { results: RaceResults; raceStart?: number }
  * A round's session list gives every session's scheduled time and status; each
  * *finished* session (which can happen mid-weekend — qualifying and the sprint
  * complete before Sunday's race) then gets its podium via a classification call.
- * The premier category id is constant across a season, so it's passed in.
+ * The premier category id is constant across a season, so it's passed in, as
+ * is `ttl` for both calls — a few minutes mid-weekend, a day once it's done.
+ * (Results share the short TTL mid-weekend: one fetched a moment too early,
+ * still empty, would otherwise be held for a day.)
  */
 async function getRoundData(
   eventId: string,
   premierId: string | undefined,
-  eventFinished: boolean,
+  ttl: number,
   timeZone: string | undefined
 ): Promise<RoundData> {
   if (!premierId) return { results: NO_RESULTS };
 
   const sessions = await getJSON<APISession[]>(
     `${BASE}/sessions?eventUuid=${eventId}&categoryUuid=${premierId}`,
-    // A live weekend's session statuses change through the days, so don't hold
-    // the list as long once the whole event is done.
-    eventFinished ? FINISHED_TTL : SCHEDULE_TTL
+    ttl
   );
   if (!sessions) return { results: NO_RESULTS };
 
@@ -203,9 +213,9 @@ async function getRoundData(
 
   const [qualifying, sprint, race] = await Promise.all([
     // Q2 decides the front of the grid; Q1 riders start from P13 back
-    buildSession(of("Q2"), timeZone),
-    buildSession(of("SPR"), timeZone),
-    buildSession(of("RAC"), timeZone),
+    buildSession(of("Q2"), timeZone, ttl),
+    buildSession(of("SPR"), timeZone, ttl),
+    buildSession(of("RAC"), timeZone, ttl),
   ]);
 
   return { results: { qualifying, sprint, race }, raceStart: race.start };
@@ -243,10 +253,18 @@ export async function getMotoGPSeason(): Promise<Omit<RaceEvent, "sources">[]> {
 
   // Every round's sessions give the race start time; finished rounds also get
   // podiums. The circuit timezone corrects the API's local-as-UTC timestamps.
+  const now = Date.now();
   const data = await Promise.all(
-    rounds.map((e) =>
-      getRoundData(e.id, premierId, isFinished(e), CIRCUIT_TZ[e.country?.iso ?? ""])
-    )
+    rounds.map((e) => {
+      const start = Date.parse(e.date_start!);
+      const end = e.date_end ? Date.parse(e.date_end) : start;
+      const ttl = isFinished(e)
+        ? FINISHED_TTL
+        : inLiveWeekend(start, end, now)
+          ? LIVE_TTL
+          : SCHEDULE_TTL;
+      return getRoundData(e.id, premierId, ttl, CIRCUIT_TZ[e.country?.iso ?? ""]);
+    })
   );
 
   return rounds.map((e, i) => {
@@ -306,8 +324,8 @@ export async function getMotoGPChampionship(
 
   const result = await getJSON<{ classification?: APIStanding[] }>(
     `${BASE}/standings?seasonUuid=${season.id}&categoryUuid=${premier.id}`,
-    // Standings move after every round, so don't hold them as long as results
-    SCHEDULE_TTL
+    // Standings move after each Sprint and race — re-checked often mid-weekend
+    rounds.some((r) => inLiveWeekend(r.dateStart, r.dateEnd, Date.now())) ? LIVE_TTL : SCHEDULE_TTL
   );
   if (!result?.classification) return null;
 

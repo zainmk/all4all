@@ -82,6 +82,8 @@ export interface RaceLeagueConfig extends LeagueChrome {
    * listing matching one, inside the race weekend, becomes the round's link.
    */
   ppvKeywords?: string[];
+  /** pitsport.st competition id (from /api/v1/competitions) — MotoGP is 100003 */
+  pitsportCompetition?: number;
   /** Standings heading, minus the year — "MotoGP Riders’ Championship" */
   championshipTitle: string;
   /** Plural competitor noun for the standings expand button — "riders" / "drivers" */
@@ -177,6 +179,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logoIsWordmark: true,
     sportekPath: "https://live.totalsporteki.st/formula1-streams/",
     ppvKeywords: ["formula 1", "formula one", "f1"],
+    pitsportCompetition: 100000,
     championshipTitle: "Formula 1 Drivers’ Championship",
     competitorPlural: "drivers",
     // The red from the logo (#DE1101)
@@ -189,7 +192,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#450a0a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.32, stop: "65%" },
       { color: "#dc2626", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
-    footer: "Streams by ppv.st & totalsportek · Results by jolpica (Ergast) & OpenF1",
+    footer: "Streams by ppv.st, pitsport & totalsportek · Results by jolpica (Ergast) & OpenF1",
   },
   motogp: {
     kind: "race",
@@ -203,6 +206,8 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
     logoIsWordmark: true,
     sportekPath: "https://live.totalsporteki.st/motogp-streams/",
     ppvKeywords: ["motogp", "moto gp"],
+    // ppv.st doesn't carry MotoGP (Oct 2026); pitsport does, every session
+    pitsportCompetition: 100003,
     championshipTitle: "MotoGP Riders’ Championship",
     competitorPlural: "riders",
     // Monochrome graphite to match the black/silver wordmark, not the old crimson
@@ -215,7 +220,7 @@ export const LEAGUES: Record<LeagueId, LeagueConfig> = {
       { color: "#27272a", className: "absolute bottom-0 -right-40 w-[700px] h-[700px]", opacity: 0.35, stop: "65%" },
       { color: "#71717a", className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[600px]", opacity: 0.08, stop: "70%" },
     ],
-    footer: "Streams by ppv.st & totalsportek · Results by motogp.com",
+    footer: "Streams by pitsport, ppv.st & totalsportek · Results by motogp.com",
   },
 };
 

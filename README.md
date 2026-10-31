@@ -54,6 +54,12 @@ a config entry plus a two-line `app/<league>/page.tsx`.
   the weekend's dates. Mirrors come from `/api/ping`, so a domain change doesn't
   need a code change. NBA falls back to built links
   (`/live/nba/<US Eastern date>/<away>-<home>`) if the API is down.
+- **[pitsport.st](lib/pitsport.ts)** — F1 and MotoGP stream pages (the only source
+  for MotoGP — ppv.st doesn't carry it). One call to its public JSON API per
+  competition gives the weekend's live and upcoming sessions; the card links to
+  the live one, else the next (shows between sessions are skipped).
+  Other series are a config entry away (`pitsportCompetition` in `lib/leagues.ts`;
+  ids from `/api/v1/competitions`).
 - **[motogp.com](lib/motogp.ts)** — race calendar, circuits and podiums, via the
   public `api.motogp.pulselive.com` endpoints. Podium lookup is three chained calls
   (categories → sessions → classification) so it only runs for finished rounds, and

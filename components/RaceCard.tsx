@@ -191,7 +191,7 @@ export function RaceCard({
 
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
-    // The round's best stream page — ppv.st's when listed, else sportek's
+    // The round's best stream page — ppv.st's or pitsport's when listed, else sportek's
     const target = sources[0];
     if (!target) return;
     window.open(target.url, "_blank", "noopener,noreferrer");
